@@ -169,6 +169,7 @@
           <div><span class="dot">▸</span> <b>穿旗门</b>：从红蓝旗门中间穿过，<b>+50 分</b></div>
           <div><span class="dot">▸</span> <b>擦身而过</b>：贴着树或石头掠过，<b>+10 分</b></div>
           <div><span class="dot">▸</span> <b>刻滑</b>：压刃转弯卷起雪雾拖尾，慢一点但更稳</div>
+          <div><span class="dot">▸</span> <b>宽谷雪道</b>：谷底 60 米宽，滑到边缘深雪会被轻轻推回，视线永远开阔</div>
           <div><span class="dot">▸</span> <b>看雪面</b>：中央是压雪纹；更白的<b>粉雪</b>会拖慢你，偏蓝发亮的<b>冰面</b>更滑、转向迟半拍</div>
           <div><span class="dot">▸</span> 速度越快视野越开、风声越尖，活得越久分越高</div>
         </div>
@@ -312,13 +313,21 @@
 
       /* ================= 地形 ================= */
       var SLOPE = 0.16;
+      /* 山谷中心线：整条雪道沿一条缓弯的中心线蜿蜒（振幅 ±16m、波长上千米），
+         弯得很慢，弯道外侧始终留着望向地平线的开口 */
+      function valleyCenter(z) {
+        return Math.sin(z * 0.0042) * 9 + Math.sin(z * 0.0016 + 1.3) * 7;
+      }
       function groundH(x, z) {
-        var ax = Math.abs(x);
-        var wall = Math.pow(Math.max(0, (ax - 30) / 16), 2) * 7;
-        var roll = Math.sin(z * 0.021 + 1.7) * 1.05 + Math.cos(z * 0.0133) * 0.9
-                 + Math.sin((x * 0.6 + z) * 0.03) * 0.32 + Math.sin(z * 0.11) * 0.16;
-        /* 缓坡丘陵：长波起伏带出滑行节奏，幅度克制不影响变线 */
-        var hills = Math.sin(z * 0.03 + 0.6) * 0.5 + Math.sin(z * 0.055 + x * 0.045) * 0.28;
+        var ax = Math.abs(x - valleyCenter(z)); // 以谷底中心线为原点的横向距离
+        /* 宽 U 形山谷：|ax|<30 谷底平坦（可滑宽 60m）；30–70m 是几乎平的裙边（只抬 3.5m）；
+           70m 以外才起主坡，二次缓升——横向 150m 处也才约 25m 高，永远压不到镜头视线 */
+        var apron = Math.pow(clamp((ax - 30) / 40, 0, 1), 2) * 3.5;
+        var wall = Math.pow(Math.max(0, (ax - 70) / 100), 2) * 34;
+        var roll = Math.sin(z * 0.021 + 1.7) * 0.8 + Math.cos(z * 0.0133) * 0.7
+                 + Math.sin((x * 0.6 + z) * 0.03) * 0.3 + Math.sin(z * 0.11) * 0.14;
+        /* 缓坡丘陵：长波起伏带出滑行节奏，幅度克制——前方雪面永远低于视线、不挡地平线 */
+        var hills = Math.sin(z * 0.03 + 0.6) * 0.38 + Math.sin(z * 0.055 + x * 0.045) * 0.2;
         /* 小雪包：只在雪道范围内（|x|<24 渐入渐出），低频低幅，骑上去是颠簸不是跳台 */
         var tf = clamp(1 - Math.max(0, ax - 15) / 9, 0, 1); tf = tf * tf;
         var mogul = Math.sin(x * 0.5 + Math.sin(z * 0.3) * 1.4) * Math.sin(z * 0.52 + x * 0.12) * 0.13 * tf
@@ -327,7 +336,7 @@
         var sf = clamp((ax - 17) / 10, 0, 1);
         var drift = Math.sin(x * 0.42 + z * 0.1 + Math.sin(z * 0.23) * 2.0) * 0.16 * sf
                   + Math.sin(z * 0.34 + x * 0.2) * 0.1 * sf;
-        return z * SLOPE + roll + hills + mogul + drift + wall;
+        return z * SLOPE + roll + hills + mogul + drift + apron + wall;
       }
 
       /* ================= 雪质分区：粉雪 / 冰面 =================
@@ -374,16 +383,16 @@
           }
           g.stroke();
         }
-        // 雪道中央压雪带：|x|<13.5m → u 0.41–0.59
-        g.fillStyle = 'rgba(255,248,232,0.55)'; g.fillRect(420, 0, 184, 1024);
+        // 雪道中央压雪带：贴图横向覆盖 280m 宽的山谷，|x|<13.5m → u 0.452–0.548
+        g.fillStyle = 'rgba(255,248,232,0.55)'; g.fillRect(463, 0, 98, 1024);
         // corduroy：沿下滑方向的细密平行纹
-        for (var lx = 424; lx < 604; lx += 6) {
+        for (var lx = 467; lx < 558; lx += 6) {
           g.fillStyle = 'rgba(176,158,128,0.34)'; g.fillRect(lx, 0, 1.6, 1024);
           g.fillStyle = 'rgba(255,255,250,0.5)'; g.fillRect(lx + 2.4, 0, 1.4, 1024);
         }
         // 雪道两条边缘沟：压雪机履带/滑行者刻出的深色波浪沟线
         [-1, 1].forEach(function (s) {
-          var cx = 512 + s * 108;
+          var cx = 512 + s * 59;
           g.strokeStyle = 'rgba(148,158,182,0.4)'; g.lineWidth = 11;
           g.beginPath();
           for (var y2 = -10; y2 <= 1034; y2 += 26) {
@@ -446,8 +455,9 @@
           pg.rotateX(-Math.PI / 2);
           var pp = pg.attributes.position;
           var cenZ = (zTop + zBot) / 2;
+          var patchCx = valleyCenter(cenZ); // 盖层跟着山谷中心线摆
           for (var vi = 0; vi < pp.count; vi++) {
-            var vx = pp.getX(vi), vz = cenZ + pp.getZ(vi);
+            var vx = patchCx + pp.getX(vi), vz = cenZ + pp.getZ(vi);
             pp.setY(vi, groundH(vx, vz) + 0.045);
             // 盖层横向边缘羽化：靠透明度做不到逐顶点，用高度微沉让边缘不抢眼
           }
@@ -455,12 +465,12 @@
           var mesh = patchPool[used++];
           mesh.geometry.dispose(); mesh.geometry = pg;
           mesh.material = t === 1 ? powderPatchMat : icePatchMat;
-          mesh.position.set(0, 0, cenZ);
+          mesh.position.set(patchCx, 0, cenZ);
           mesh.visible = true;
         }
         for (var u = used; u < PATCH_N; u++) patchPool[u].visible = false;
       }
-      var CH_LEN = 120, CH_WID = 150, CH_NUM = 4;
+      var CH_LEN = 120, CH_WID = 280, CH_NUM = 4; // 宽 280m：谷底 60m + 两侧裙边与缓坡都画进同一块地形，不露边
       var chunks = [];
 
       /* 障碍物实例池 */
@@ -506,8 +516,8 @@
         var cz = ch.mesh.position.z;
         var t0 = ch.idx * T_PER, r0 = ch.idx * R_PER;
         var gi = ch.idx; // 旗门槽位 = 块序号
-        var gateCx = (rnd() * 2 - 1) * 13;
         var gateZ = cz - 20 - rnd() * 70;
+        var gateCx = valleyCenter(gateZ) + (rnd() * 2 - 1) * 13; // 旗门跟着山谷中心线走
         var gateHalf = 3.4;
         if (!isStart) {
           ch.gate = { x: gateCx, z: gateZ, done: false };
@@ -538,14 +548,16 @@
           var tx, tz, tries = 0;
           do {
             tz = cz - rnd() * CH_LEN + 6;
-            tx = inTrack ? (6 + rnd() * 19) * (rnd() < 0.5 ? -1 : 1) : (28 + rnd() * 38) * (rnd() < 0.5 ? -1 : 1);
+            /* 横向偏移以谷底中心线为原点：道内树 ≤25m、道外林木 ≤64m，全在平坦谷底/裙边内，主坡（70m 外）一棵不种 */
+            var tOff = inTrack ? (6 + rnd() * 19) * (rnd() < 0.5 ? -1 : 1) : (28 + rnd() * 36) * (rnd() < 0.5 ? -1 : 1);
+            tx = valleyCenter(tz) + tOff;
             tries++;
           } while (tries < 8 && !isStart && ch.gate && Math.abs(tz - gateZ) < 5 && Math.abs(tx - gateCx) < gateHalf + 2.6);
           function hideTree() {
             hideInst(trunkIM, slot); hideInst(folIM, slot); hideInst(fol2IM, slot);
             hideInst(pineIM, slot); hideInst(pineTopIM, slot);
           }
-          if (isStart && tz > -26 && Math.abs(tx) < 26) { hideTree(); continue; }
+          if (isStart && tz > -26 && Math.abs(tOff) < 26) { hideTree(); continue; }
           if (!inTrack) {
             // 道外林木按密度抽稀：聚簇附近保留概率高，段与段之间疏密分明
             var nearClus = Math.min(Math.abs(tz - clusA), Math.abs(tz - clusB)) < 26;
@@ -568,12 +580,12 @@
             setInst(fol2IM, slot, tx, ty + (1.6 + 4.6) * sc, tz, rnd() * 3, sc, sc, sc);
             hideInst(pineIM, slot); hideInst(pineTopIM, slot);
           }
-          if (Math.abs(tx) <= 30) ch.colliders.push({ x: tx, z: tz, r: 0.55 * sc + 0.25, kind: 'tree', near: false });
+          if (Math.abs(tOff) <= 34) ch.colliders.push({ x: tx, z: tz, r: 0.55 * sc + 0.25, kind: 'tree', near: false });
         }
         for (var j = 0; j < R_PER; j++) {
           var rslot = r0 + j;
-          var rx = (4 + rnd() * 20) * (rnd() < 0.5 ? -1 : 1);
           var rz = cz - rnd() * CH_LEN + 6;
+          var rx = valleyCenter(rz) + (4 + rnd() * 20) * (rnd() < 0.5 ? -1 : 1); // 岩石只落在谷底可滑区内
           if (isStart && rz > -26) { hideInst(rockIM, rslot); continue; }
           var rs = 0.55 + rnd() * 0.9;
           var ry2 = groundH(rx, rz);
@@ -608,7 +620,7 @@
           pos.setY(i, groundH(lx, wz));
           /* 顶点色画雪质：粉雪更白、冰面偏蓝，只在雪道宽度内（边缘横向羽化） */
           var zf = zoneFactors(wz);
-          var xf = clamp(1 - Math.max(0, Math.abs(lx) - 10.5) / 4.5, 0, 1);
+          var xf = clamp(1 - Math.max(0, Math.abs(lx - valleyCenter(wz)) - 10.5) / 4.5, 0, 1);
           colTmp2.copy(colBase);
           if (zf.p > 0 && xf > 0) colTmp2.lerp(colPowder, zf.p * xf);
           if (zf.i > 0 && xf > 0) colTmp2.lerp(colIce, zf.i * xf * 0.9);
@@ -620,7 +632,7 @@
       }
 
       for (var ci = 0; ci < CH_NUM; ci++) {
-        var geo = new THREE.PlaneGeometry(CH_WID, CH_LEN, 56, 44);
+        var geo = new THREE.PlaneGeometry(CH_WID, CH_LEN, 88, 44);
         geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count * 3), 3));
         geo.rotateX(-Math.PI / 2);
         var mesh = new THREE.Mesh(geo, snowMat);
@@ -632,11 +644,10 @@
         buildChunkGeo(chObj);
       }
 
-      /* 远山三层剪影 + 分层视差（修：旧版山体全摆在雪道两侧 x≥88、距离又远，
-         被两侧雪墙（|x|=75 处已隆起约 55m）整片挡住，截图里看不见三层）。
-         新版按层摆位，保证菜单首帧与滑行中都能看到错落的三层：
-         近山 — 深色林线山脊，基底贴着两侧雪墙顶面（groundH 取样），最先掠过；
-         中层 — 雪顶大山，立在雪墙之外、基底抬高，雪冠露在近山之上；
+      /* 远山三层剪影 + 分层视差：三层全部退到宽谷的谷壁之外（横向 ≥150m），
+         只做背景剪影，绝不靠近雪道遮挡视线：
+         近山 — 深色林线山脊，基底贴着谷壁外坡面（groundH 取样），最先掠过；
+         中层 — 雪顶大山，立在更远处、基底抬高，雪冠露在近山之上；
          远山 — 雾蓝巨峰，横在正前方天际线（含正中一座），基底压回远处坡面。
          每层滚动速率不同（近 0.9 / 中 0.5 / 远 0.22）：滑行时近山快速后掠、
          远山几乎不动，纵深就是这么出来的；横向视差同理，层越近跟随 px 偏移越大。 */
@@ -649,9 +660,9 @@
       var mtnFarSnowMat2 = new THREE.MeshStandardMaterial({ color: 0xe6ddc9, roughness: 1, flatShading: true, fog: false });
       var mountains = [];
       var MTN_LAYERS = [
-        { n: 10, span: 300, scroll: 0.9, latPar: 0.16, xMin: 50, xVar: 24, hMin: 30, hVar: 18 },  // 近山：深色树线
-        { n: 8, span: 340, scroll: 0.5, latPar: 0.07, xMin: 86, xVar: 52, hMin: 64, hVar: 34 },  // 中层：雪顶
-        { n: 6, span: 400, scroll: 0.22, latPar: 0.03, xMin: 96, xVar: 70, hMin: 120, hVar: 55 }  // 远山：雾层剪影
+        { n: 10, span: 300, scroll: 0.9, latPar: 0.16, xMin: 150, xVar: 45, hMin: 30, hVar: 18 },  // 近山：深色树线（谷壁之外）
+        { n: 8, span: 340, scroll: 0.5, latPar: 0.07, xMin: 215, xVar: 65, hMin: 64, hVar: 34 },  // 中层：雪顶
+        { n: 6, span: 400, scroll: 0.22, latPar: 0.03, xMin: 255, xVar: 85, hMin: 120, hVar: 55 }  // 远山：雾层剪影
       ];
       function mtnPickX(L, layer, i) {
         if (layer === 2 && i % 3 === 0) return (Math.random() - 0.5) * 110; // 远层每三座有一座正横在天际线中央
@@ -984,6 +995,7 @@
       var fovKick = 0; // 过旗门瞬间的小幅 FOV 冲量，衰减回速度基线
       var speedFxEl = document.getElementById('speedFx');
       var camPos = new THREE.Vector3(0, 5, 11);
+      var camX = 0; // 相机横向位置：单独慢速跟随（见主循环相机段），不贴着主角全量左右摆
       var keys = { l: false, r: false };
       var btnHeld = { l: false, r: false };
       var dragSteer = 0, dragging = false, dragStartX = 0;
@@ -1038,7 +1050,7 @@
         });
         refreshPatches(0);
         rider.position.set(0, groundH(0, 0), 0);
-        camPos.set(0, groundH(0, 0) + 4.5, 10.5);
+        camPos.set(0, groundH(0, 0) + 5.8, 11.5); camX = 0;
       }
 
       function startGame() {
@@ -1198,11 +1210,25 @@
             speed -= riderZone.p * 2.3 * dt;                // 粉雪阻力
             speed += riderZone.i * 1.5 * dt;                // 冰面溜得快
             speed = clamp(speed, 9, maxSpeed);
+            /* 软边界（以谷底中心线为原点，谷底半宽 30m）：横向超过 24m 进入边缘深雪区——
+               往外转阻力变大、速度被深雪拖慢、同时被轻轻推回谷底；硬顶 33m 仍在平坦裙边内
+               （主坡 70m 外才起），主角永远爬不上山坡、钻不进山体 */
+            var vcNow = valleyCenter(pz);
+            var localX = px - vcNow;
+            var edgeOver = Math.abs(localX) - 24;
             var targetLat = steerVis * (6.5 + speed * 0.34) * (1 - riderZone.i * 0.3);
+            if (edgeOver > 0 && localX !== 0 && Math.sign(targetLat) === Math.sign(localX)) {
+              targetLat *= clamp(1 - edgeOver * 0.14, 0.22, 1); // 越往外、转向越钝
+            }
             var latK = (1 - Math.pow(0.0005, dt)) * (1 - riderZone.i * 0.5); // 冰面响应变慢
             latVel = lerp(latVel, targetLat, latK);
-            px = clamp(px + latVel * dt, -29, 29);
-            if (Math.abs(px) >= 29) latVel *= 0.4;
+            px += latVel * dt;
+            if (edgeOver > 0) {
+              speed -= edgeOver * 1.1 * dt; // 边缘深雪拖速
+              px -= Math.sign(localX) * edgeOver * (1 - Math.pow(0.004, dt)); // 弹簧式回推：越界越深推得越狠
+            }
+            var localNow = px - vcNow;
+            if (Math.abs(localNow) > 33) { px = vcNow + clamp(localNow, -33, 33); latVel *= 0.35; }
             prevZ = pz;
             pz -= speed * dt;
             distance += speed * dt;
@@ -1336,7 +1362,7 @@
             m.position.z = pz + m.userData.relZ;
             m.position.x = m.userData.baseX - px * m.userData.latPar;
             if (m.userData.layer === 0) {
-              m.position.y = groundH(clamp(m.userData.baseX, -74, 74), m.position.z) - 3;
+              m.position.y = groundH(m.userData.baseX, m.position.z) - 3;
             } else if (m.userData.layer === 1) {
               m.position.y = m.position.z * SLOPE + 12;
             } else {
@@ -1346,7 +1372,7 @@
           /* 雾带贴在前方固定距离上，跟着坡面高度走 */
           fogBands.forEach(function (b) {
             var bz = pz - b.userData.dist;
-            b.position.set(px * 0.55, bz * SLOPE + b.userData.h * 0.32, bz);
+            b.position.set(px * 0.35 + valleyCenter(bz) * 0.45, bz * SLOPE + b.userData.h * 0.32, bz);
           });
 
           /* --- 相机 --- */
@@ -1354,13 +1380,23 @@
           if (state === 'menu') {
             var sway = Math.sin(tNow * 0.35) * 2.6;
             camTargetPos = new THREE.Vector3(sway, ry + 3.4, pz + 9.5);
-            lookPt = new THREE.Vector3(0, ry + 1.2, pz - 10);
+            lookPt = new THREE.Vector3(valleyCenter(pz - 22) * 0.7, groundH(0, pz - 22) + 1.4, pz - 22);
           } else {
-            camTargetPos = new THREE.Vector3(px * 0.62, ry + 4.1 + speed * 0.02, pz + 9.2);
-            lookPt = new THREE.Vector3(px * 0.85, ry + 0.9, pz - 11);
+            /* 相机防遮挡：抬高（+5.6 起）、拉远（身后 11.5m），横向只跟主角相对谷底偏移的一半、
+               并始终向谷底中心收；注视点落在主角前方约 24m 的雪面上——视线顺着山谷开口
+               望出去，前方永远是地平线和低太阳，而不是身边山坡 */
+            var vcCam = valleyCenter(pz), vcFwd = valleyCenter(pz - 24);
+            var lookX = vcFwd + (px - vcCam) * 0.8;
+            camTargetPos = new THREE.Vector3(vcCam + (px - vcCam) * 0.5, ry + 5.6 + speed * 0.03, pz + 11.5);
+            lookPt = new THREE.Vector3(lookX, groundH(lookX, pz - 24) + 1.3, pz - 24);
           }
           camPos.lerp(camTargetPos, 1 - Math.pow(0.001, dt));
           camera.position.copy(camPos);
+          /* 横向跟随单独放缓：目标 x 已只取主角偏移的一半，这里再用慢速率追，
+             镜头不随主角左右全量甩动，取景始终锚在谷底中线附近 */
+          if (state === 'menu') camX = camTargetPos.x;
+          else camX = lerp(camX, camTargetPos.x, 1 - Math.pow(0.02, dt));
+          camera.position.x = camX;
           if (shake > 0) {
             shake -= dt * 1.6;
             camera.position.x += (Math.random() - 0.5) * shake * 0.7;
@@ -1370,6 +1406,21 @@
             var vib = (speed - 22) * 0.006;
             camera.position.y += Math.sin(tNow * 47) * vib;
             camera.position.x += Math.sin(tNow * 39 + 1.3) * vib * 0.6;
+          }
+          if (state !== 'menu') {
+            /* 视线防穿山（最后一道保险）：采样相机→主角连线，若中途地形高过连线就把相机
+               再抬高需要的量，保证连线永远从雪面上方掠过；相机自身也始终离地 ≥2.4m。
+               宽谷里几乎不会触发，触发也只是轻轻抬一下 */
+            var liftY = 0;
+            for (var cs2 = 0.25; cs2 < 0.95; cs2 += 0.175) {
+              var sxp = camera.position.x + (px - camera.position.x) * cs2;
+              var szp = camera.position.z + (pz - camera.position.z) * cs2;
+              var syp = camera.position.y + (ry + 1.1 - camera.position.y) * cs2;
+              var needY = groundH(sxp, szp) + 1.8 - syp;
+              if (needY > 0) liftY = Math.max(liftY, needY / (1 - cs2));
+            }
+            var camFloorY = groundH(camera.position.x, camera.position.z) + 2.4;
+            camera.position.y = Math.max(camera.position.y + liftY, camFloorY);
           }
           camera.lookAt(lookPt);
           /* FOV 随速度拉开：66° 起步，极速冲到约 86°，过门再顶一下 */
