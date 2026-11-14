@@ -211,6 +211,7 @@
       /* ================= 工具 ================= */
       function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
       function lerp(a, b, t) { return a + (b - a) * t; }
+      function damp(a, b, r, dt) { return lerp(a, b, 1 - Math.pow(r, dt)); } // 帧率无关的平滑趋近，姿态专用
       function mulberry32(seed) {
         var t = seed >>> 0;
         return function () {
@@ -746,59 +747,187 @@
       });
 
       /* ================= 主角：单板滑雪者 =================
-         侧身站姿：板沿下滑方向（-Z），双脚前后绑在板上，
-         身体正面朝 +X（侧对镜头），转弯时压刃倾身。       */
+         侧身站姿：板沿下滑方向（-Z），双脚前后绑在板上，身体正面朝 +X。
+         关节化骨骼：腿 = 髋/膝双骨 IK（靴子永远钉在固定器上，蹲多深膝盖自己弯），
+         臂 = 肩/肘两级关节；姿态（压刃/屈膝/手臂/跳跃落地）在主循环里平滑驱动。 */
       var rider = new THREE.Group();
-      var jacketMat = new THREE.MeshStandardMaterial({ color: 0xff6a1a, roughness: 0.55 });
-      var pantsMat = new THREE.MeshStandardMaterial({ color: 0x22304a, roughness: 0.7 });
+      function riderTexture(w, h, draw) {
+        var c = document.createElement('canvas'); c.width = w; c.height = h;
+        draw(c.getContext('2d'), w, h);
+        var t = new THREE.CanvasTexture(c); t.anisotropy = 4; return t;
+      }
+      /* 雪服：橙色基底 + 深浅拼块 + 褶皱阴影线 + 拉链/胸袋/反光条，不再是纯色平板 */
+      var jacketTex = riderTexture(256, 256, function (g) {
+        var grad = g.createLinearGradient(0, 0, 0, 256);
+        grad.addColorStop(0, '#ff7d26'); grad.addColorStop(0.55, '#f96a0d'); grad.addColorStop(1, '#da5005');
+        g.fillStyle = grad; g.fillRect(0, 0, 256, 256);
+        g.fillStyle = 'rgba(186,62,4,0.55)'; g.fillRect(0, 0, 34, 256); g.fillRect(222, 0, 34, 256); // 两侧深色拼块
+        g.fillStyle = 'rgba(255,172,92,0.45)'; g.fillRect(98, 0, 24, 256); // 高光带
+        g.strokeStyle = 'rgba(158,46,0,0.5)'; g.lineWidth = 3;
+        for (var i = 0; i < 9; i++) { // 褶皱：不规则弧线阴影
+          var y0 = 24 + i * 26 + (i % 3) * 5;
+          g.beginPath(); g.moveTo(22 + (i * 37) % 56, y0);
+          g.quadraticCurveTo(128, y0 + 13 + (i % 2) * 8, 234 - (i * 29) % 48, y0 - 4); g.stroke();
+        }
+        g.fillStyle = 'rgba(38,24,18,0.85)'; g.fillRect(124, 0, 7, 256); // 前拉链
+        g.strokeStyle = 'rgba(120,36,0,0.7)'; g.lineWidth = 2.5; g.strokeRect(152, 88, 58, 30); // 胸袋轮廓
+        g.fillStyle = 'rgba(245,248,250,0.8)'; g.fillRect(152, 98, 58, 9); // 反光条
+        g.fillStyle = 'rgba(120,36,0,0.5)'; g.fillRect(0, 230, 256, 26); // 下摆阴影
+      });
+      /* 雪裤：深藏蓝 + 布纹竖纹 + 膝部阴影带 */
+      var pantsTex = riderTexture(128, 128, function (g) {
+        g.fillStyle = '#26334d'; g.fillRect(0, 0, 128, 128);
+        g.fillStyle = 'rgba(88,108,148,0.32)';
+        for (var i = 0; i < 6; i++) g.fillRect(10 + i * 21, 0, 5, 128);
+        g.fillStyle = 'rgba(8,13,24,0.5)'; g.fillRect(0, 54, 128, 22);
+        g.strokeStyle = 'rgba(8,12,22,0.4)'; g.lineWidth = 2;
+        for (var j = 0; j < 4; j++) { g.beginPath(); g.moveTo(0, 26 + j * 28); g.lineTo(128, 20 + j * 28); g.stroke(); }
+      });
+      /* 板面：深底 + 橙红火焰纹（从板尾烧向板头）+ 板头几何箭纹，后方跟随视角一眼可辨 */
+      var boardTex = riderTexture(128, 512, function (g) {
+        g.fillStyle = '#0d2733'; g.fillRect(0, 0, 128, 512);
+        g.fillStyle = '#12b5c9'; g.fillRect(0, 0, 9, 512); g.fillRect(119, 0, 9, 512); // 两侧亮边线
+        g.fillStyle = 'rgba(240,248,255,0.92)';
+        for (var i = 0; i < 4; i++) { // 板头几何箭纹（画布顶部 = 板头方向）
+          var ay = 26 + i * 27;
+          g.beginPath(); g.moveTo(16, ay + 16); g.lineTo(64, ay); g.lineTo(112, ay + 16);
+          g.lineTo(112, ay + 27); g.lineTo(64, ay + 11); g.lineTo(16, ay + 27); g.closePath(); g.fill();
+        }
+        function flame(cx, baseY, len, wdt, col) {
+          g.fillStyle = col; g.beginPath();
+          g.moveTo(cx - wdt, baseY);
+          g.bezierCurveTo(cx - wdt * 0.95, baseY - len * 0.38, cx - wdt * 0.28, baseY - len * 0.52, cx, baseY - len);
+          g.bezierCurveTo(cx + wdt * 0.28, baseY - len * 0.52, cx + wdt * 0.95, baseY - len * 0.38, cx + wdt, baseY);
+          g.closePath(); g.fill();
+        }
+        flame(64, 508, 310, 47, '#e5322d');
+        flame(64, 502, 258, 37, '#ff7a1a');
+        flame(64, 496, 200, 26, '#ffb03a');
+        flame(64, 490, 132, 15, '#ffe08a');
+        flame(26, 470, 120, 11, '#ff7a1a');
+        flame(102, 470, 120, 11, '#ff7a1a');
+        g.fillStyle = 'rgba(255,255,255,0.85)'; g.fillRect(44, 486, 40, 6);
+      });
+      var jacketMat = new THREE.MeshStandardMaterial({ map: jacketTex, roughness: 0.62 });
+      var pantsMat = new THREE.MeshStandardMaterial({ map: pantsTex, roughness: 0.78 });
       var skinMat = new THREE.MeshStandardMaterial({ color: 0xe8b58e, roughness: 0.6 });
       var darkMat = new THREE.MeshStandardMaterial({ color: 0x1c222c, roughness: 0.5 });
-      var whiteMat = new THREE.MeshStandardMaterial({ color: 0xf4f7fb, roughness: 0.35 });
+      var bootMat = new THREE.MeshStandardMaterial({ color: 0x2e343d, roughness: 0.55 });
+      var strapMat = new THREE.MeshStandardMaterial({ color: 0x9aa6b4, roughness: 0.35, metalness: 0.55 });
+      var helmetMat = new THREE.MeshStandardMaterial({ color: 0x23272e, roughness: 0.88 }); // 深色哑光头盔
+      var goggleMat = new THREE.MeshStandardMaterial({ color: 0xff8b2d, roughness: 0.12, metalness: 0.9, emissive: 0x8a3800, emissiveIntensity: 0.4 }); // 暖色反光镜面
+      var accentMat = new THREE.MeshStandardMaterial({ color: 0xff7a1a, roughness: 0.4 });
       function part(geo, mat, x, y, z, parent) {
         var m = new THREE.Mesh(geo, mat);
         m.position.set(x, y, z); m.castShadow = true;
         (parent || rider).add(m); return m;
       }
-      // 板：长沿 Z，宽沿 X，板头（-Z）微微上翘
-      var boardG = new THREE.Group(); rider.add(boardG);
-      var boardMat = new THREE.MeshStandardMaterial({ color: 0x12b5c9, roughness: 0.35 });
-      var board = part(new THREE.BoxGeometry(0.34, 0.045, 1.5), boardMat, 0, 0.06, 0, boardG);
-      var nose = part(new THREE.BoxGeometry(0.34, 0.04, 0.26), boardMat, 0, 0.1, -0.85, boardG);
-      nose.rotation.x = -0.5;
-      var tail = part(new THREE.BoxGeometry(0.34, 0.04, 0.2), boardMat, 0, 0.085, 0.82, boardG);
-      tail.rotation.x = 0.38;
-      part(new THREE.BoxGeometry(0.36, 0.02, 0.5), darkMat, 0, 0.095, 0, boardG); // 板面垫
-      // 双脚：前后绑带 + 靴子（沿板长方向一前一后）
-      [-0.3, 0.3].forEach(function (bz) {
-        part(new THREE.BoxGeometry(0.2, 0.09, 0.3), darkMat, 0, 0.13, bz, boardG);      // 固定器
-        part(new THREE.BoxGeometry(0.17, 0.15, 0.27), whiteMat, 0.01, 0.22, bz, boardG); // 雪靴
-      });
-      // 腿：大腿从髋部向前/后下伸，小腿近乎垂直落到靴子（屈膝站姿）
-      var bodyG = new THREE.Group(); rider.add(bodyG);
-      function leg(zSign) {
-        var g = new THREE.Group(); bodyG.add(g);
-        var thigh = part(new THREE.CylinderGeometry(0.085, 0.075, 0.5, 7), pantsMat, 0, 0, 0, g);
-        thigh.position.set(0, 0.68, zSign * 0.22); thigh.rotation.x = zSign * 0.85;
-        var shin = part(new THREE.CylinderGeometry(0.07, 0.06, 0.42, 7), pantsMat, 0, 0, 0, g);
-        shin.position.set(0, 0.38, zSign * 0.31); shin.rotation.x = -zSign * 0.25;
-        return g;
+      function limbMesh(rTop, rBot, len, mat) { // 原点在关节处、沿 -Y 伸出 len
+        var geo = new THREE.CylinderGeometry(rTop, rBot, len, 7);
+        geo.translate(0, -len / 2, 0);
+        var m = new THREE.Mesh(geo, mat); m.castShadow = true; return m;
       }
-      leg(-1); leg(1);
-      part(new THREE.BoxGeometry(0.3, 0.2, 0.44), pantsMat, 0, 0.92, 0, bodyG); // 髋部
-      var torso = part(new THREE.BoxGeometry(0.27, 0.62, 0.5), jacketMat, 0.02, 1.32, 0, bodyG); // 躯干：正面朝 +X
-      torso.rotation.z = -0.06;
-      part(new THREE.BoxGeometry(0.29, 0.1, 0.52), darkMat, 0.02, 1.05, 0, bodyG); // 腰带
-      // 手臂：沿身体两侧（±Z）下垂外展保持平衡
-      [-1, 1].forEach(function (s) {
-        var arm = part(new THREE.CylinderGeometry(0.06, 0.05, 0.58, 7), jacketMat, 0, 0, 0, bodyG);
-        arm.position.set(0.03, 1.3, s * 0.38); arm.rotation.x = s * 0.5; arm.rotation.z = 0.25;
-        part(new THREE.SphereGeometry(0.075, 8, 7), darkMat, 0.1, 1.06, s * 0.52, bodyG); // 手套
+      // 板：长沿 Z，宽沿 X，板头（-Z）/板尾橙色上翘，板面贴火焰纹贴片
+      var boardG = new THREE.Group(); rider.add(boardG);
+      var boardMat = new THREE.MeshStandardMaterial({ color: 0x0d2733, roughness: 0.38 });
+      part(new THREE.BoxGeometry(0.34, 0.045, 1.5), boardMat, 0, 0.06, 0, boardG);
+      var topSheet = new THREE.Mesh(new THREE.PlaneGeometry(0.315, 1.46),
+        new THREE.MeshStandardMaterial({ map: boardTex, roughness: 0.3 }));
+      topSheet.rotation.x = -Math.PI / 2; topSheet.position.set(0, 0.086, 0); topSheet.receiveShadow = true;
+      boardG.add(topSheet);
+      var nose = part(new THREE.BoxGeometry(0.34, 0.04, 0.26), accentMat, 0, 0.1, -0.85, boardG);
+      nose.rotation.x = -0.5;
+      var tail = part(new THREE.BoxGeometry(0.34, 0.04, 0.2), accentMat, 0, 0.085, 0.82, boardG);
+      tail.rotation.x = 0.38;
+      // 固定器 + 雪靴：底盘、高背（脚跟侧）、双绑带 + 金属侧扣，深灰靴
+      [-0.3, 0.3].forEach(function (bz) {
+        part(new THREE.BoxGeometry(0.27, 0.035, 0.35), darkMat, 0, 0.1, bz, boardG);      // 底盘
+        part(new THREE.BoxGeometry(0.045, 0.17, 0.3), darkMat, -0.135, 0.18, bz, boardG);  // 高背
+        part(new THREE.BoxGeometry(0.19, 0.16, 0.29), bootMat, 0.01, 0.2, bz, boardG);     // 雪靴
+        part(new THREE.BoxGeometry(0.2, 0.05, 0.3), darkMat, 0.01, 0.115, bz, boardG);     // 靴底
+        [-0.075, 0.075].forEach(function (dz) {
+          part(new THREE.BoxGeometry(0.21, 0.032, 0.08), strapMat, 0.01, 0.29, bz + dz, boardG); // 绑带
+        });
+        part(new THREE.BoxGeometry(0.045, 0.05, 0.07), strapMat, 0.125, 0.25, bz, boardG); // 侧扣
       });
-      // 头：头盔 + 雪镜（脸朝 +X）
-      part(new THREE.SphereGeometry(0.145, 12, 10), skinMat, 0.03, 1.78, 0, bodyG);
-      var helmet = part(new THREE.SphereGeometry(0.16, 12, 9, 0, Math.PI * 2, 0, Math.PI * 0.55), whiteMat, 0.03, 1.81, 0, bodyG);
-      part(new THREE.BoxGeometry(0.1, 0.07, 0.24), darkMat, 0.15, 1.78, 0, bodyG); // 雪镜
-      part(new THREE.BoxGeometry(0.2, 0.05, 0.2), new THREE.MeshStandardMaterial({ color: 0xffd23e, roughness: 0.5 }), 0.03, 1.95, 0, bodyG); // 头盔顶小贴
+      // 上身组：整体随重心升降（屈膝时沉下去），髋部前折在 torsoG 上做
+      var bodyG = new THREE.Group(); rider.add(bodyG);
+      part(new THREE.BoxGeometry(0.3, 0.2, 0.46), pantsMat, 0, 0.99, 0, bodyG); // 髋部
+      var torsoG = new THREE.Group(); torsoG.position.set(0, 1.04, 0); bodyG.add(torsoG);
+      part(new THREE.BoxGeometry(0.28, 0.6, 0.5), jacketMat, 0.02, 0.32, 0, torsoG);  // 躯干：正面朝 +X
+      part(new THREE.BoxGeometry(0.3, 0.1, 0.52), jacketMat, 0.02, 0.04, 0, torsoG);  // 衣摆
+      part(new THREE.BoxGeometry(0.29, 0.07, 0.51), darkMat, 0.02, 0.1, 0, torsoG);   // 腰带
+      part(new THREE.CylinderGeometry(0.055, 0.06, 0.09, 7), skinMat, 0.03, 0.66, 0, torsoG); // 脖子
+      // 头：深色哑光头盔 + 镜带 + 暖色反光雪镜（脸朝 +X）
+      var headG = new THREE.Group(); headG.position.set(0.03, 0.8, 0); torsoG.add(headG);
+      part(new THREE.SphereGeometry(0.14, 12, 10), skinMat, 0, 0, 0, headG);
+      part(new THREE.SphereGeometry(0.158, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.58), helmetMat, 0, 0.018, 0, headG);
+      part(new THREE.BoxGeometry(0.1, 0.035, 0.16), helmetMat, 0.02, 0.155, 0, headG); // 盔顶通风口
+      part(new THREE.CylinderGeometry(0.147, 0.147, 0.05, 14, 1, true), darkMat, 0, 0.005, 0, headG); // 雪镜带
+      part(new THREE.BoxGeometry(0.1, 0.08, 0.25), goggleMat, 0.105, 0.005, 0, headG); // 反光镜面
+      // 手臂：肩/肘两级关节（姿态在主循环里驱动，绝不僵直 T 形）
+      var arms = [];
+      [-1, 1].forEach(function (s) {
+        var sh = new THREE.Group(); sh.position.set(0.03, 0.52, s * 0.29); torsoG.add(sh);
+        sh.add(limbMesh(0.064, 0.052, 0.34, jacketMat));
+        var el = new THREE.Group(); el.position.set(0, -0.34, 0); sh.add(el);
+        var eb = new THREE.Mesh(new THREE.SphereGeometry(0.058, 8, 7), jacketMat); eb.castShadow = true; el.add(eb);
+        el.add(limbMesh(0.05, 0.042, 0.3, jacketMat));
+        var glove = new THREE.Mesh(new THREE.SphereGeometry(0.085, 8, 7), darkMat);
+        glove.position.set(0, -0.34, 0); glove.castShadow = true; el.add(glove);
+        arms.push({ s: s, sh: sh, el: el });
+      });
+      // 腿：髋/膝双骨 IK（网格在 rider 空间里逐帧解算，踝点恒定 = 靴子恒在板上）
+      var LEG_L1 = 0.48, LEG_L2 = 0.46;
+      var legs = [];
+      [-1, 1].forEach(function (s) {
+        var thigh = limbMesh(0.092, 0.07, LEG_L1, pantsMat); rider.add(thigh);
+        var shin = limbMesh(0.068, 0.054, LEG_L2, pantsMat); rider.add(shin);
+        var knee = new THREE.Mesh(new THREE.SphereGeometry(0.076, 8, 7), pantsMat);
+        knee.castShadow = true; rider.add(knee);
+        legs.push({ s: s, thigh: thigh, shin: shin, knee: knee });
+      });
+      var _H = new THREE.Vector3(), _A = new THREE.Vector3(), _D = new THREE.Vector3(),
+          _K = new THREE.Vector3(), _P = new THREE.Vector3(), _DIR = new THREE.Vector3(),
+          _DOWN = new THREE.Vector3(0, -1, 0);
+      function placeLimb(mesh, from, to) {
+        mesh.position.copy(from);
+        _DIR.subVectors(to, from).normalize();
+        mesh.quaternion.setFromUnitVectors(_DOWN, _DIR);
+      }
+      function solveLeg(leg, hipY) {
+        _H.set(0, hipY, leg.s * 0.17);
+        _A.set(0.02, 0.3, leg.s * 0.3);
+        _D.subVectors(_A, _H);
+        var d = clamp(_D.length(), 0.2, LEG_L1 + LEG_L2 - 0.02);
+        _DIR.copy(_D).normalize();
+        var a = (LEG_L1 * LEG_L1 - LEG_L2 * LEG_L2 + d * d) / (2 * d);
+        var h = Math.sqrt(Math.max(0.0004, LEG_L1 * LEG_L1 - a * a));
+        _P.set(1, 0.12, leg.s * 0.18); // 膝盖朝向：正前方（+X）略向外
+        _P.addScaledVector(_DIR, -_P.dot(_DIR));
+        if (_P.lengthSq() < 0.001) _P.set(1, 0, 0); else _P.normalize();
+        _K.copy(_H).addScaledVector(_DIR, a).addScaledVector(_P, h);
+        placeLimb(leg.thigh, _H, _K);
+        placeLimb(leg.shin, _K, _A);
+        leg.knee.position.copy(_K);
+      }
+      /* 手臂平衡：与倾身同步——前手（板头侧）向弯内前探、后手向后摆，空中双臂张开 */
+      function poseArms(tNow, speedN, airBlend, dt) {
+        var leanN = clamp(poseLean, -1, 1);
+        for (var i = 0; i < arms.length; i++) {
+          var arm = arms[i], lead = arm.s < 0;
+          var reach = lead ? (0.3 + Math.abs(leanN) * 0.4 + leanN * 0.16)
+                           : (0.16 - Math.abs(leanN) * 0.32 - leanN * 0.1);
+          reach += airBlend * (lead ? 0.18 : -0.08) + Math.sin(tNow * 1.6 + (lead ? 0 : 2.1)) * 0.05;
+          var spread = 0.56 + speedN * 0.14 + Math.abs(leanN) * 0.16 + airBlend * 0.5
+                     + Math.sin(tNow * 1.25 + (lead ? 1 : 3.4)) * 0.045;
+          arm.sh.rotation.z = damp(arm.sh.rotation.z, reach, 0.002, dt);
+          arm.sh.rotation.x = damp(arm.sh.rotation.x, -arm.s * spread, 0.002, dt);
+          var bend = 0.4 + poseCrouch * 0.18 + airBlend * 0.3;
+          arm.el.rotation.z = damp(arm.el.rotation.z, bend, 0.002, dt);
+          arm.el.rotation.x = damp(arm.el.rotation.x, -arm.s * bend * 0.35, 0.002, dt);
+        }
+      }
       rider.position.set(0, groundH(0, 0), 0);
       scene.add(rider);
 
@@ -923,6 +1052,19 @@
         puffPos[i3 + 1] = y + 0.16;
         puffPos[i3 + 2] = z + 0.7 + Math.random() * 0.4;
       }
+      /* 雪雾爆发：换刃/落地瞬间从板尾向四周扬起一团（复用现有两层粒子池） */
+      function burstSpray(n, strength) {
+        for (var bi2 = 0; bi2 < n; bi2++) {
+          spawnSpray(px + (Math.random() - 0.5) * 0.5, groundH(px, pz), pz + (Math.random() - 0.5) * 0.8,
+            strength * (0.7 + Math.random() * 0.6), Math.random() < 0.5 ? -1 : 1);
+        }
+      }
+      function burstPuff(n, strength) {
+        for (var bi3 = 0; bi3 < n; bi3++) {
+          spawnPuff(px + (Math.random() - 0.5) * 0.6, groundH(px, pz), pz + (Math.random() - 0.5) * 0.8,
+            strength * (0.7 + Math.random() * 0.6), Math.random() < 0.5 ? -1 : 1);
+        }
+      }
       function updatePuffs(posArr, dat, n, dt, grav) {
         for (var i = 0; i < n; i++) {
           var p = dat[i];
@@ -993,6 +1135,9 @@
       var distance = 0, score = 0, gateBonus = 0, gatesPassed = 0, elapsed = 0;
       var bestScore = 0, shake = 0, crashTimer = -1, prevZ = 0;
       var fovKick = 0; // 过旗门瞬间的小幅 FOV 冲量，衰减回速度基线
+      /* 人物姿态/纵向物理状态：全部平滑量，逐帧 damp 趋近目标，绝不跳变 */
+      var riderY = 0, riderVy = 0, prevGroundY = 0, airTime = 0, airGap = 0;
+      var landDip = 0, crouchPulse = 0, prevSteerSign = 0, poseLean = 0, poseCrouch = 0.4;
       var speedFxEl = document.getElementById('speedFx');
       var camPos = new THREE.Vector3(0, 5, 11);
       var camX = 0; // 相机横向位置：单独慢速跟随（见主循环相机段），不贴着主角全量左右摆
@@ -1032,6 +1177,8 @@
         px = 0; pz = 0; prevZ = 0; speed = 13; latVel = 0; steerVis = 0;
         distance = 0; score = 0; gateBonus = 0; gatesPassed = 0; elapsed = 0;
         shake = 0; crashTimer = -1; fovKick = 0; sprayAcc = 0; puffAcc = 0;
+        riderY = groundH(0, 0); prevGroundY = riderY; riderVy = 0; airGap = 0; airTime = 0;
+        landDip = 0; crouchPulse = 0; prevSteerSign = 0; poseLean = 0; poseCrouch = 0.4;
         riderZone = { p: 0, i: 0 }; lastZoneKey = ''; zoneTagEl.className = '';
         rider.rotation.set(0, 0, 0);
         for (var i = 0; i < chunks.length; i++) {
@@ -1272,8 +1419,19 @@
             }
             /* 雪雾：直滑只有板尾细雪；压刃越深、速度越快，板刃外侧喷得越猛 */
             var carve = Math.abs(steerVis);
+            /* 换刃瞬间：转向变号 = 一次换刃——板尾扬起一团雪（量随转向力度），身体顺势下沉泵压 */
+            var sSign = steerVis > 0.22 ? 1 : (steerVis < -0.22 ? -1 : 0);
+            if (sSign !== 0) {
+              if (prevSteerSign !== 0 && sSign !== prevSteerSign && speed > 10) {
+                crouchPulse = 0.34;
+                var ebN = 6 + Math.round(carve * 10);
+                for (var ebi = 0; ebi < ebN; ebi++) spawnSpray(px, groundH(px, pz), pz, 0.8 + carve * 0.7, sSign > 0 ? -1 : 1);
+                spawnPuff(px, groundH(px, pz), pz, 0.9, sSign > 0 ? -1 : 1);
+              }
+              prevSteerSign = sSign;
+            }
             /* 粉雪区扬雪明显更多、雾团更大更白 */
-            sprayAcc += dt * (7 + Math.pow(carve, 1.5) * 85 + speed * 0.5) * (1 + riderZone.p * 1.8 - riderZone.i * 0.45); // 粉雪扬雪近三倍、冰面扬雪减半
+            sprayAcc += dt * (7 + Math.pow(carve, 1.5) * 85 + speed * 0.5) * (1 + riderZone.p * 1.8 - riderZone.i * 0.45) * (airGap > 0.05 ? 0.1 : 1); // 粉雪扬雪近三倍、冰面扬雪减半；离雪瞬间板不刮雪
             var gy = groundH(px, pz);
             var spraySide = steerVis >= 0 ? -1 : 1; // 雪从压刃的外侧（转弯外侧）喷出
             while (sprayAcc > 1) {
@@ -1282,7 +1440,7 @@
               if (carve > 0.55 && Math.random() < 0.35) spawnSpray(px, gy, pz, 0.4, -spraySide); // 深压刃时内侧也溅一点
             }
             /* 拖尾雾团：刻滑时持续在身后留一串大雾团，形成弯道雪雾拖尾 */
-            puffAcc += dt * (2.5 + carve * 15 + speed * 0.14) * (1 + riderZone.p * 1.4 - riderZone.i * 0.4);
+            puffAcc += dt * (2.5 + carve * 15 + speed * 0.14) * (1 + riderZone.p * 1.4 - riderZone.i * 0.4) * (airGap > 0.05 ? 0.15 : 1);
             while (puffAcc > 1) {
               puffAcc -= 1;
               spawnPuff(px, gy, pz, 0.5 + carve * 0.9, spraySide);
@@ -1319,17 +1477,59 @@
             if (crashTimer > 0) { crashTimer -= dt; if (crashTimer <= 0) showOver(); }
           }
 
-          /* --- 主角姿态 --- */
+          /* --- 主角姿态：压刃倾身 / 屈膝重心 / 手臂平衡 / 跳跃落地，全部平滑插值 --- */
           var ry = groundH(px, pz);
           if (state !== 'over') {
+            var speedN = clamp(speed / 31, 0, 1);
+            var carveN = Math.abs(steerVis);
+            /* 纵向物理：贴地时跟住地形；地面骤降（冲过雪包顶）时以跃起前的纵速离雪，
+               重力拉回，落地按冲击量下蹲缓冲并扬起一圈雪雾 */
+            var gy = ry;
+            var gVel = dt > 0.0001 ? (gy - prevGroundY) / dt : 0;
+            if (airGap > 0.03) {
+              riderVy -= 26 * dt;
+              riderY += riderVy * dt;
+              airTime += dt;
+              if (riderY <= gy) {
+                riderY = gy;
+                var impact = -riderVy; riderVy = 0; airGap = 0; airTime = 0;
+                landDip = clamp(impact * 0.1, 0.12, 0.8);
+                if (impact > 2.3 && state === 'play') { burstSpray(15, 1.15); burstPuff(7, 1); }
+              } else airGap = riderY - gy;
+            } else {
+              riderY = gy; airGap = 0;
+              if (state === 'play' && gVel < -1.7 && riderVy > -0.4 && speed > 13) {
+                riderVy = clamp(riderVy, -0.4, 1.2); // 以跃起前的纵速离雪（蹬伸瞬间）
+                riderY = gy + 0.04; airGap = 0.04; airTime = 0;
+              } else riderVy = gVel;
+            }
+            prevGroundY = gy;
+            var airBlend = clamp(airGap * 3.0, 0, 1);
+            landDip = Math.max(0, landDip - dt * 1.9);
+            crouchPulse = Math.max(0, crouchPulse - dt * 1.6);
+            /* 压刃倾身：转向越急、速度越快，全身向弯内压得越狠（steerVis 正负天然区分 heel/toe 两侧） */
+            poseLean = damp(poseLean, steerVis * (0.52 + speedN * 0.34), 0.0012, dt);
+            /* 屈膝重心：全程蹲姿打底，越快越低、刻滑再沉、换刃泵压、落地深蹲缓冲后回弹；
+               空中先蹬伸舒展、随后收腿屈膝准备落地 */
+            var crouchT = 0.38 + speedN * 0.3 + carveN * 0.22 + crouchPulse + landDip;
+            if (airBlend > 0.03) crouchT = lerp(crouchT, airTime < 0.13 ? 0.16 : 0.78, airBlend);
+            poseCrouch = damp(poseCrouch, clamp(crouchT, 0.05, 1), 0.0018, dt);
             var hF = groundH(px, pz - 1.6), hB = groundH(px, pz + 1.6);
-            rider.position.set(px, ry + 0.02, pz);
-            rider.rotation.x = -Math.atan2(hB - hF, 3.2);
-            rider.rotation.z = lerp(rider.rotation.z, -steerVis * 0.55, 0.18);
-            rider.rotation.y = lerp(rider.rotation.y, steerVis * 0.3, 0.18);
-            bodyG.position.y = Math.sin(tNow * (state === 'play' ? 7 : 2)) * (state === 'play' ? 0.03 : 0.015);
-            bodyG.rotation.z = -steerVis * 0.22;
-            boardG.rotation.z = -steerVis * 0.38;
+            var pitchT = lerp(-Math.atan2(hB - hF, 3.2), -0.05, airBlend); // 离雪时板面回水平
+            rider.position.set(px, riderY + 0.02, pz);
+            rider.rotation.x = damp(rider.rotation.x, pitchT, 0.002, dt);
+            rider.rotation.z = damp(rider.rotation.z, -poseLean, 0.0012, dt);
+            rider.rotation.y = damp(rider.rotation.y, steerVis * 0.3, 0.004, dt);
+            boardG.rotation.z = damp(boardG.rotation.z, -poseLean * 0.32, 0.0012, dt); // 板面比身体多压一截刃
+            bodyG.rotation.z = damp(bodyG.rotation.z, -poseLean * 0.16, 0.002, dt);
+            var bob = Math.sin(tNow * (state === 'play' ? 7 : 2)) * (state === 'play' ? 0.028 : 0.014) * (1 - airBlend);
+            bodyG.position.y = -poseCrouch * 0.24 + bob; // 重心下沉量
+            torsoG.rotation.z = damp(torsoG.rotation.z, -(0.1 + poseCrouch * 0.3 + speedN * 0.08), 0.002, dt); // 髋部前折
+            torsoG.rotation.y = damp(torsoG.rotation.y, poseLean * 0.4, 0.002, dt); // 肩线转入弯内
+            poseArms(tNow, speedN, airBlend, dt);
+            /* 双腿双骨 IK：髋随重心升降，靴子始终钉在固定器上 */
+            var hipY = bodyG.position.y + 0.99;
+            solveLeg(legs[0], hipY); solveLeg(legs[1], hipY);
           }
 
           /* --- 地形回收 --- */
