@@ -146,6 +146,7 @@
         <div class="stat"><div class="lab">距离 DIST</div><div class="val"><span id="hDist">0</span><small> m</small></div></div>
         <div class="stat"><div class="lab">速度 SPEED</div><div class="val"><span id="hSpeed">0</span><small> km/h</small></div></div>
         <div class="stat"><div class="lab">分数 SCORE</div><div class="val"><span id="hScore">0</span></div></div>
+        <div class="stat"><div class="lab">时段 PHASE</div><div class="val" id="hPhase" style="font-size:15px">☀️ 白天</div></div>
       </div>
     </div>
     <div id="zoneTag"></div>
@@ -163,7 +164,7 @@
         <p class="game-name">3 D 单 板 滑 雪</p>
         <h1 class="title">雪舞世界</h1>
         <p class="title-en">SNOW DANCE WORLD</p>
-        <p class="tagline">金色时刻，踩着单板从雪山之巅一路舞下山。<br />低太阳拉长影子，压刃卷起雪雾——穿旗门、躲松树岩石，别摔！</p>
+        <p class="tagline">踩着单板从雪山之巅一路舞下山，白天、黄昏、极光夜与黎明在滑行中流转。<br />压刃卷起雪雾——穿旗门、躲松树岩石，别摔！</p>
         <div class="howto">
           <div><span class="dot">▸</span> <b>转向</b>：按住屏幕左右按钮 / ← → 方向键 / 左右拖动</div>
           <div><span class="dot">▸</span> <b>穿旗门</b>：从红蓝旗门中间穿过，<b>+50 分</b></div>
@@ -171,6 +172,7 @@
           <div><span class="dot">▸</span> <b>刻滑</b>：压刃转弯卷起雪雾拖尾，慢一点但更稳</div>
           <div><span class="dot">▸</span> <b>宽谷雪道</b>：谷底 60 米宽，滑到边缘深雪会被轻轻推回，视线永远开阔</div>
           <div><span class="dot">▸</span> <b>看雪面</b>：中央是压雪纹；更白的<b>粉雪</b>会拖慢你，偏蓝发亮的<b>冰面</b>更滑、转向迟半拍</div>
+          <div><span class="dot">▸</span> <b>昼夜流转</b>：约 2 分半走完一轮——白天、黄昏、繁星极光夜、黎明，看右上角时段牌</div>
           <div><span class="dot">▸</span> 速度越快视野越开、风声越尖，活得越久分越高</div>
         </div>
         <button class="bigbtn" id="startBtn">开始滑行</button>
@@ -269,8 +271,6 @@
       var fill = new THREE.DirectionalLight(0x7e9fd4, 0.34); // 阴影面冷蓝补光，和暖光拉出冷暖对比
       fill.position.set(-30, 26, 30);
       scene.add(fill); scene.add(fill.target);
-      var sunElev = 1; // 1=金色时刻太阳高度，0=贴地平线（黄昏加深时 JS 压低）
-
       /* 天空穹顶：渐变 + 太阳光晕（低太阳方向一团暖辉，地平线一带金边） */
       var skyUni = {
         topColor: { value: new THREE.Color(0x3a68b8) },
@@ -311,6 +311,63 @@
       }));
       sunSprite.scale.set(300, 300, 1);
       scene.add(sunSprite);
+
+      /* 繁星：钉在天空穹顶内侧的点层，跟着相机走；透明度只由昼夜循环的 star 参数驱动
+         （黄昏末尾开始露头、夜里最亮、黎明退场），带一点呼吸闪烁 */
+      var STAR_N = reducedMotion ? 300 : 650;
+      var starPos = new Float32Array(STAR_N * 3);
+      for (var sti = 0; sti < STAR_N; sti++) {
+        var sv = new THREE.Vector3(Math.random() * 2 - 1, Math.random() * 0.92 + 0.08, Math.random() * 2 - 1);
+        if (sv.lengthSq() < 0.05) sv.set(0.3, 0.85, -0.4);
+        sv.normalize().multiplyScalar(815);
+        starPos[sti * 3] = sv.x; starPos[sti * 3 + 1] = sv.y; starPos[sti * 3 + 2] = sv.z;
+      }
+      var starGeo = new THREE.BufferGeometry();
+      starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+      var starMat = new THREE.PointsMaterial({
+        color: 0xdfeaff, size: 2.2, sizeAttenuation: false, map: glowTexture('rgba(255,255,255,1)', 'rgba(200,220,255,.45)'),
+        transparent: true, opacity: 0, depthWrite: false, fog: false, blending: THREE.AdditiveBlending
+      });
+      var starGroup = new THREE.Points(starGeo, starMat);
+      starGroup.frustumCulled = false; starGroup.visible = false;
+      scene.add(starGroup);
+
+      /* 极光：多层半透明波浪带挂在前方高空，顶点波浪让带身缓缓摆动，
+         片元里竖直羽化 + 沿带流光（光幔的垂幕感）；强度只由昼夜循环的 aurora 参数驱动，只在夜里出现 */
+      var auroraGroup = new THREE.Group();
+      var auroraMats = [];
+      function auroraBand(w, h, x, y, z, phase, f, colA, colB) {
+        var mat = new THREE.ShaderMaterial({
+          uniforms: {
+            uTime: { value: 0 }, uOpacity: { value: 0 }, uPhase: { value: phase },
+            uColA: { value: new THREE.Color(colA) }, uColB: { value: new THREE.Color(colB) }
+          },
+          transparent: true, depthWrite: false, side: THREE.DoubleSide, fog: false,
+          blending: THREE.AdditiveBlending,
+          vertexShader: 'uniform float uTime; uniform float uPhase; varying vec2 vUv; varying float vW;' +
+            'void main(){ vUv = uv; vec3 p = position;' +
+            ' float w = sin(p.x*0.011 + uTime*0.32 + uPhase)*13.0 + sin(p.x*0.026 - uTime*0.21 + uPhase*1.7)*6.0;' +
+            ' p.y += w*(0.35 + uv.y*0.65); p.z += sin(p.x*0.007 + uTime*0.16 + uPhase)*20.0; vW = w;' +
+            ' gl_Position = projectionMatrix*modelViewMatrix*vec4(p,1.0); }',
+          fragmentShader: 'uniform float uTime; uniform float uOpacity; uniform float uPhase; uniform vec3 uColA; uniform vec3 uColB; varying vec2 vUv; varying float vW;' +
+            'void main(){ float vert = smoothstep(0.02, 0.3, vUv.y) * smoothstep(1.0, 0.42, vUv.y);' +
+            ' float rays = 0.5 + 0.5*sin(vUv.x*110.0 + sin(vUv.x*21.0 + uTime*0.45 + uPhase)*2.6 + uTime*0.3 + uPhase);' +
+            ' rays = 0.4 + 0.6*pow(rays, 1.7);' +
+            ' vec3 col = mix(uColB, uColA, clamp(vUv.y + vW*0.006, 0.0, 1.0));' +
+            ' gl_FragColor = vec4(col, uOpacity * vert * rays); }'
+        });
+        var m = new THREE.Mesh(new THREE.PlaneGeometry(w, h, 72, 10), mat);
+        m.position.set(x, y, z);
+        m.renderOrder = 3; m.frustumCulled = false;
+        auroraGroup.add(m);
+        auroraMats.push({ mat: mat, f: f });
+      }
+      auroraBand(980, 150, -40, 215, -500, 0.0, 0.5, 0x3dff9e, 0x1fbfae);   // 主带：绿 → 青
+      auroraBand(820, 110, 150, 268, -580, 2.2, 0.38, 0x54ffb0, 0x2a7fd4);  // 高带：绿 → 蓝
+      auroraBand(700, 90, -260, 165, -430, 4.1, 0.34, 0x2fe88f, 0x7a4fd0);  // 低带：绿 → 紫
+      auroraBand(1100, 190, 60, 305, -660, 5.6, 0.26, 0x46ffa4, 0x1f9e8f);  // 远景大带
+      auroraGroup.visible = false;
+      scene.add(auroraGroup);
 
       /* ================= 地形 ================= */
       var SLOPE = 0.16;
@@ -709,7 +766,7 @@
 
       /* 雾带三层（近 / 中 / 远各一张横贯山谷的半透明雾墙、各用独立材质）：
          近处一层薄雾从镜头前掠过、中景一道压在中层山脚、远景一道托着远山剪影；
-         三层颜色都跟金色天色一起走（applyPalette 里逐层赋值），远层再多掺一点雾蓝。 */
+         三层颜色都跟天色一起走（updateDayNight 里逐层赋值），夜里同步压暗。 */
       function fogBandTexture() {
         var c = document.createElement('canvas'); c.width = 256; c.height = 128;
         var g = c.getContext('2d');
@@ -1148,7 +1205,7 @@
       var hudEl = document.getElementById('hud');
       var steerEl = document.getElementById('steer');
       var muteBtn = document.getElementById('muteBtn');
-      var hDist = document.getElementById('hDist'), hSpeed = document.getElementById('hSpeed'), hScore = document.getElementById('hScore');
+      var hDist = document.getElementById('hDist'), hSpeed = document.getElementById('hSpeed'), hScore = document.getElementById('hScore'), hPhase = document.getElementById('hPhase');
       var popup = document.getElementById('popup');
       /* 雪质提示牌 #zoneTag：只在分区切换时改 DOM（每帧调用、状态没变就直接返回）。
          粉雪 → 白牌「粉雪区」；冰面 → 蓝牌「冰面」；普通压雪 → 熄灭。 */
@@ -1286,34 +1343,108 @@
         renderer.setSize(window.innerWidth, window.innerHeight);
       });
 
-      /* ================= 日夜色调：全程以金色时刻为主调 =================
-         t=0 午后金光（太阳偏低、暖金），t=1 深黄昏（太阳贴地、橙红、影子最长） */
-      var palDay = { top: new THREE.Color(0x3a68b8), hor: new THREE.Color(0xffd9a0), fog: new THREE.Color(0xf3cf9e), sun: new THREE.Color(0xffbe62), sunI: 1.7, hemiI: 0.55, glow: new THREE.Color(0xffa64d), glowAmt: 0.85, expo: 1.14 };
-      var palDusk = { top: new THREE.Color(0x232f63), hor: new THREE.Color(0xff9a4e), fog: new THREE.Color(0xdd9a68), sun: new THREE.Color(0xff7e33), sunI: 1.25, hemiI: 0.4, glow: new THREE.Color(0xff7a2e), glowAmt: 1.15, expo: 1.08 };
-      var tmpC = new THREE.Color();
-      var palA = new THREE.Color(), palB = new THREE.Color();
-      function lerpHex(color, hexA, hexB, t) { color.lerpColors(palA.setHex(hexA), palB.setHex(hexB), t); }
-      function applyPalette(t) {
-        skyUni.topColor.value.lerpColors(palDay.top, palDusk.top, t);
-        skyUni.horizonColor.value.lerpColors(palDay.hor, palDusk.hor, t);
-        skyUni.glowColor.value.lerpColors(palDay.glow, palDusk.glow, t);
-        skyUni.glowAmt.value = lerp(palDay.glowAmt, palDusk.glowAmt, t);
-        scene.fog.color.lerpColors(palDay.fog, palDusk.fog, t);
-        sun.color.lerpColors(palDay.sun, palDusk.sun, t);
-        sun.intensity = lerp(palDay.sunI, palDusk.sunI, t);
-        hemi.intensity = lerp(palDay.hemiI, palDusk.hemiI, t);
-        sunElev = 1 - t * 0.62;                       // 黄昏加深 → 太阳压得更低 → 影子更长
-        renderer.toneMappingExposure = lerp(palDay.expo, palDusk.expo, t);
-        sunSprite.material.opacity = lerp(0.85, 1, t);
-        lerpHex(sunSprite.material.color, 0xffe9bb, 0xffb37a, t);
-        lerpHex(glitMat.color, 0xffcf87, 0xff9e57, t);
-        lerpHex(sprayMat.color, 0xfff1dc, 0xffd9ae, t);
-        lerpHex(puffMat.color, 0xffe9cd, 0xffc98f, t);
-        /* 雾带三层颜色跟天色走：午后金白 → 黄昏橙雾；远层多掺雾蓝、近层最暖 */
-        fogBandMat.color.lerpColors(palDay.fog, palDusk.fog, t);
-        fogBandMatNear.color.lerpColors(palDay.fog, palDusk.fog, Math.max(0, t - 0.12));
-        fogBandMatFar.color.lerpColors(palDay.fog, palDusk.fog, t).lerp(tmpC.setHex(0xb9c9de), 0.38);
+      /* ================= 昼夜完整循环：白天 → 黄昏 → 极光夜 → 黎明 =================
+         一轮 160 秒（约 2 分 40 秒），关键帧之间全程 smoothstep 插值：
+         天空/雾/光色、主光位置（太阳沉下后同一盏灯转成月亮从对侧升起）、星光、极光、
+         雪面粗糙度（夜里压低 → 月光在雪面上拉出反光）一起流转，绝不跳变。 */
+      var DN_T = 160;
+      var DN_KEYS = [
+        // 白天：高太阳、冷白雪面、远山清晰、雪面明亮
+        { p: 0.00, top: 0x2e63c8, hor: 0xd8e8f8, fog: 0xdfeaf4, fogFar: 420, sun: 0xfff1d8, sunI: 2.0, hemiSky: 0xbfd8ff, hemiGnd: 0xe9eef0, hemiI: 0.8, fillI: 0.3, glow: 0xffe9bb, glowAmt: 0.3, expo: 1.12, lx: 26, ly: 80, lz: -42, star: 0, aurora: 0, night: 0, rough: 0.9, glit: 0.45, disc: 1.0 },
+        // 午后转暖：太阳西斜、光色渐金，仍是白天
+        { p: 0.24, top: 0x3568bd, hor: 0xe8dfc8, fog: 0xe9dfc9, fogFar: 400, sun: 0xffeec9, sunI: 1.9, hemiSky: 0xb4cdef, hemiGnd: 0xf2e6cc, hemiI: 0.72, fillI: 0.32, glow: 0xffdf9e, glowAmt: 0.5, expo: 1.13, lx: 38, ly: 55, lz: -48, star: 0, aurora: 0, night: 0, rough: 0.89, glit: 0.6, disc: 1.0 },
+        // 黄昏：金色时刻——低角度暖太阳、长影、逆光雪粒（沿用原金色时刻调色）
+        { p: 0.38, top: 0x232f63, hor: 0xff9a4e, fog: 0xdd9a68, fogFar: 360, sun: 0xff7e33, sunI: 1.3, hemiSky: 0x8fa3d9, hemiGnd: 0xf7d9ae, hemiI: 0.42, fillI: 0.3, glow: 0xff7a2e, glowAmt: 1.15, expo: 1.08, lx: 46, ly: 13, lz: -52, star: 0.05, aurora: 0, night: 0.12, rough: 0.88, glit: 1.0, disc: 1.05 },
+        // 深黄昏：太阳贴地、橙红压到最深，星星开始露头
+        { p: 0.50, top: 0x1a2148, hor: 0xf2703f, fog: 0xb97a5e, fogFar: 330, sun: 0xff5f2a, sunI: 0.85, hemiSky: 0x5f6fa8, hemiGnd: 0xc99a76, hemiI: 0.34, fillI: 0.24, glow: 0xff5f24, glowAmt: 1.25, expo: 1.06, lx: 50, ly: 6, lz: -50, star: 0.35, aurora: 0, night: 0.4, rough: 0.86, glit: 0.85, disc: 1.1 },
+        // 极光夜：深蓝夜空、繁星、冷色月光 + 雪面月光反光，绿色极光带缓缓流动
+        { p: 0.63, top: 0x050b21, hor: 0x101f3a, fog: 0x0c1930, fogFar: 300, sun: 0xa9c4ff, sunI: 0.8, hemiSky: 0x2e4470, hemiGnd: 0x131c2e, hemiI: 0.5, fillI: 0.16, glow: 0xbdd2ff, glowAmt: 0.55, expo: 1.07, lx: -36, ly: 58, lz: -40, star: 1, aurora: 0.9, night: 1, rough: 0.55, glit: 0.12, disc: 0.36 },
+        // 夜深：月亮爬得更高，极光最盛
+        { p: 0.80, top: 0x040a1e, hor: 0x0e1c34, fog: 0x0a1628, fogFar: 290, sun: 0xa9c4ff, sunI: 0.85, hemiSky: 0x2c4270, hemiGnd: 0x121a2c, hemiI: 0.5, fillI: 0.16, glow: 0xbdd2ff, glowAmt: 0.5, expo: 1.07, lx: -20, ly: 66, lz: -48, star: 1, aurora: 1, night: 1, rough: 0.55, glit: 0.12, disc: 0.36 },
+        // 黎明：东方（+X）地平线粉紫霞光渐亮，星星与极光退场
+        { p: 0.89, top: 0x35406e, hor: 0xeda3c0, fog: 0xc7a0b4, fogFar: 330, sun: 0xffab72, sunI: 1.05, hemiSky: 0x7d84b8, hemiGnd: 0xd9b49a, hemiI: 0.45, fillI: 0.26, glow: 0xff9ec4, glowAmt: 1.05, expo: 1.09, lx: 54, ly: 8, lz: -44, star: 0.12, aurora: 0, night: 0.3, rough: 0.87, glit: 0.6, disc: 1.0 },
+        // 清晨：霞光收尽，回到明亮白天（与首帧平滑衔接成环）
+        { p: 0.965, top: 0x2f66cc, hor: 0xdcecf7, fog: 0xe2ecf4, fogFar: 410, sun: 0xfff3da, sunI: 1.95, hemiSky: 0xbfd8ff, hemiGnd: 0xe9eef0, hemiI: 0.78, fillI: 0.3, glow: 0xffe9bb, glowAmt: 0.35, expo: 1.12, lx: 34, ly: 68, lz: -44, star: 0, aurora: 0, night: 0, rough: 0.9, glit: 0.4, disc: 1.0 }
+      ];
+      var DN_COLF = ['top', 'hor', 'fog', 'sun', 'hemiSky', 'hemiGnd', 'glow'];
+      var DN_NUMF = ['fogFar', 'sunI', 'hemiI', 'fillI', 'glowAmt', 'expo', 'lx', 'ly', 'lz', 'star', 'aurora', 'night', 'rough', 'glit', 'disc'];
+      DN_KEYS.forEach(function (k) { DN_COLF.forEach(function (f) { k[f] = new THREE.Color(k[f]); }); });
+      var ENV = { topC: new THREE.Color(), horC: new THREE.Color(), fogC: new THREE.Color(), sunC: new THREE.Color(), hemiSkyC: new THREE.Color(), hemiGndC: new THREE.Color(), glowC: new THREE.Color(), fogFar: 400, sunI: 1.7, hemiI: 0.55, fillI: 0.3, glowAmt: 0.5, expo: 1.12, lx: 30, ly: 70, lz: -44, star: 0, aurora: 0, night: 0, rough: 0.9, glit: 0.4, disc: 1 };
+      var DN_WHITE = new THREE.Color(0xffffff);
+      var DN_SNOWCOOL = new THREE.Color(0xbdd2f2);
+      var DN_SPRAY_W = new THREE.Color(0xfff1dc), DN_SPRAY_C = new THREE.Color(0xd8e6ff);
+      var DN_PUFF_W = new THREE.Color(0xffe9cd), DN_PUFF_C = new THREE.Color(0xcdd9f2);
+      var DN_ICE_W = new THREE.Color(0xffe9bb), DN_ICE_C = new THREE.Color(0xbfd6ff);
+      var DN_FAR_W = new THREE.Color(0x9db1c9), DN_FAR_N = new THREE.Color(0x25344e);
+      var DN_FARS_W = new THREE.Color(0xe6ddc9), DN_FARS_N = new THREE.Color(0x53637f);
+      var lastPhaseLab = '';
+      function updateDayNight(tNow) {
+        var ph = (tNow % DN_T) / DN_T;
+        var n = DN_KEYS.length, i = 0;
+        while (i < n - 1 && ph >= DN_KEYS[i + 1].p) i++;
+        var a = DN_KEYS[i], b = DN_KEYS[(i + 1) % n];
+        var span = i === n - 1 ? (1 - a.p + b.p) : (b.p - a.p);
+        var local = i === n - 1 ? (ph >= a.p ? ph - a.p : ph + 1 - a.p) : (ph - a.p);
+        var u = span > 0 ? clamp(local / span, 0, 1) : 0;
+        u = u * u * (3 - 2 * u);
+        DN_NUMF.forEach(function (f) { ENV[f] = lerp(a[f], b[f], u); });
+        ENV.topC.lerpColors(a.top, b.top, u);
+        ENV.horC.lerpColors(a.hor, b.hor, u);
+        ENV.fogC.lerpColors(a.fog, b.fog, u);
+        ENV.sunC.lerpColors(a.sun, b.sun, u);
+        ENV.hemiSkyC.lerpColors(a.hemiSky, b.hemiSky, u);
+        ENV.hemiGndC.lerpColors(a.hemiGnd, b.hemiGnd, u);
+        ENV.glowC.lerpColors(a.glow, b.glow, u);
+        /* 天空 / 雾 / 光 rig */
+        skyUni.topColor.value.copy(ENV.topC);
+        skyUni.horizonColor.value.copy(ENV.horC);
+        skyUni.glowColor.value.copy(ENV.glowC);
+        skyUni.glowAmt.value = ENV.glowAmt;
+        scene.fog.color.copy(ENV.fogC);
+        scene.fog.near = 30 - ENV.night * 6;
+        scene.fog.far = ENV.fogFar;
+        sun.color.copy(ENV.sunC);
+        sun.intensity = ENV.sunI;
+        hemi.color.copy(ENV.hemiSkyC);
+        hemi.groundColor.copy(ENV.hemiGndC);
+        hemi.intensity = ENV.hemiI;
+        fill.intensity = ENV.fillI;
+        renderer.toneMappingExposure = ENV.expo;
+        /* 太阳盘：白天是日轮、黄昏涨大、夜里缩成一轮冷月（位置在主循环里按 ENV 光位摆放） */
+        sunSprite.material.color.copy(ENV.sunC).lerp(DN_WHITE, 0.35);
+        sunSprite.material.opacity = 0.78 + ENV.glowAmt * 0.18;
+        var dsc = 300 * ENV.disc;
+        sunSprite.scale.set(dsc, dsc, 1);
+        /* 雪面：夜里粗糙度压低，月光在雪面拉出反光；雪色微染冷蓝；冰面高光转冷月色 */
+        snowMat.roughness = ENV.rough;
+        snowMat.color.copy(DN_WHITE).lerp(DN_SNOWCOOL, ENV.night * 0.5);
+        icePatchMat.specular.lerpColors(DN_ICE_W, DN_ICE_C, ENV.night);
+        glitMat.color.copy(ENV.glowC).lerp(DN_WHITE, 0.25);
+        sprayMat.color.lerpColors(DN_SPRAY_W, DN_SPRAY_C, ENV.night * 0.85);
+        puffMat.color.lerpColors(DN_PUFF_W, DN_PUFF_C, ENV.night * 0.85);
+        /* 雾带三层跟天色走，夜里压暗免得发假光 */
+        fogBandMat.color.copy(ENV.fogC);
+        fogBandMatNear.color.copy(ENV.fogC).lerp(ENV.glowC, 0.22 * (1 - ENV.night));
+        fogBandMatFar.color.copy(ENV.fogC).lerp(ENV.topC, 0.5);
         fogBandMat2.color.copy(fogBandMatNear.color);
+        var fbDim = 1 - ENV.night * 0.55;
+        fogBandMat.opacity = 0.22 * fbDim;
+        fogBandMatNear.opacity = 0.13 * fbDim;
+        fogBandMatFar.opacity = 0.3 * fbDim;
+        /* 远山剪影（关雾层、自带颜色）夜里同步压暗成深蓝剪影 */
+        mtnFarMat2.color.lerpColors(DN_FAR_W, DN_FAR_N, ENV.night);
+        mtnFarSnowMat2.color.lerpColors(DN_FARS_W, DN_FARS_N, ENV.night);
+        /* 星星淡入淡出；极光只在夜里流动 */
+        starGroup.visible = ENV.star > 0.02;
+        starMat.opacity = ENV.star * (0.82 + 0.18 * Math.sin(tNow * 0.8));
+        auroraGroup.visible = ENV.aurora > 0.02;
+        for (var ai = 0; ai < auroraMats.length; ai++) {
+          auroraMats[ai].mat.uniforms.uTime.value = tNow;
+          auroraMats[ai].mat.uniforms.uOpacity.value = ENV.aurora * auroraMats[ai].f;
+        }
+        /* HUD 时段指示：只在时段切换时改 DOM */
+        var lab = ph < 0.31 ? '☀️ 白天' : (ph < 0.565 ? '🌇 黄昏' : (ph < 0.855 ? '🌌 极光夜' : '🌅 黎明'));
+        if (lab !== lastPhaseLab) { lastPhaseLab = lab; hPhase.textContent = lab; }
       }
 
       /* ================= 主循环 ================= */
@@ -1321,6 +1452,7 @@
       var hudTick = 0;
       var lastFrameMs = 0;
       resetWorld();
+      updateDayNight(0); // 首帧前先把 ENV 定在白天关键帧上
       state = 'menu';
 
       function animate() {
@@ -1635,20 +1767,20 @@
           var fxT = state === 'play' ? clamp((speed - 17) / 14, 0, 1) : 0;
           speedFxEl.style.opacity = reducedMotion ? (fxT * 0.45).toFixed(3) : fxT.toFixed(3);
           sky.position.copy(camera.position);
-          /* 低太阳：从右前方低空照过来（海拔角仅约 10–16°），影子被拉得很长；
-             太阳盘与天空光晕方向与真实光源严格一致 */
-          var sunH = lerp(9, 17, sunElev);
-          sun.position.set(px + 46, ry + sunH, pz - 52);
+          starGroup.position.copy(camera.position);
+          auroraGroup.position.copy(camera.position);
+          /* 主光（太阳/月亮同一盏灯，位置由昼夜循环 ENV 给出）：白天高悬、黄昏贴地拉长影、
+             夜里换到对侧高空做冷月光；太阳/月亮盘与天空光晕方向与真实光源严格一致 */
+          sun.position.set(px + ENV.lx, ry + ENV.ly, pz + ENV.lz);
           sun.target.position.set(px - 6, ry, pz + 6);
           fill.position.set(px - 34, ry + 26, pz + 26);
           fill.target.position.set(px, ry, pz - 10);
-          var sd = new THREE.Vector3(46, sunH, -52).normalize();
+          var sd = new THREE.Vector3(ENV.lx, ENV.ly, ENV.lz).normalize();
           skyUni.sunDir.value.copy(sd);
           sunSprite.position.set(camera.position.x + sd.x * 780, camera.position.y + sd.y * 780, camera.position.z + sd.z * 780);
 
-          /* --- 日夜缓变（150 秒一轮，金色时刻占大头，黄昏只压到深金不入夜） --- */
-          var cyc = (Math.sin(tNow * Math.PI * 2 / 150 - Math.PI / 2) + 1) / 2;
-          applyPalette(Math.pow(cyc, 1.5) * 0.92);
+          /* --- 昼夜完整循环（160 秒一轮：白天→黄昏→极光夜→黎明，全程平滑插值） --- */
+          updateDayNight(tNow);
 
           /* --- 飘雪：速度越快，雪花越往脸上扑（相对速度感） --- */
           snowPts.position.set(px * 0.6, ry, pz - 20);
@@ -1680,7 +1812,7 @@
             }
           }
           glitGeo.attributes.position.needsUpdate = true;
-          glitMat.opacity = 0.4 + 0.3 * Math.abs(Math.sin(tNow * 1.7)) + (1 - sunElev) * 0.25;
+          glitMat.opacity = ENV.glit * (0.55 + 0.35 * Math.abs(Math.sin(tNow * 1.7)));
 
           /* --- 速度流线：只在高速时浮现，从镜头两侧向后掠过 --- */
           var stT = state === 'play' ? clamp((speed - 19) / 12, 0, 1) : 0;
