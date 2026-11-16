@@ -56,6 +56,8 @@
       #zoneTag.on { display: block; }
       #zoneTag.powder { background: rgba(250, 252, 255, .88); color: #33506e; border: 1px solid rgba(190, 215, 245, .9); }
       #zoneTag.ice { background: rgba(140, 195, 240, .85); color: #0d2c4a; border: 1px solid rgba(210, 240, 255, .9); }
+      #zoneTag.jump { background: rgba(255, 122, 26, .9); color: #fff; border: 1px solid rgba(255, 210, 160, .9); }
+      #zoneTag.narrow { background: rgba(24, 68, 44, .88); color: #dff5e4; border: 1px solid rgba(140, 220, 170, .8); }
 
       /* ---------- touch steer buttons ---------- */
       #steer {
@@ -172,6 +174,8 @@
           <div><span class="dot">▸</span> <b>刻滑</b>：压刃转弯卷起雪雾拖尾，慢一点但更稳</div>
           <div><span class="dot">▸</span> <b>宽谷雪道</b>：谷底 60 米宽，滑到边缘深雪会被轻轻推回，视线永远开阔</div>
           <div><span class="dot">▸</span> <b>看雪面</b>：中央是压雪纹；更白的<b>粉雪</b>会拖慢你，偏蓝发亮的<b>冰面</b>更滑、转向迟半拍</div>
+          <div><span class="dot">▸</span> <b>跳台</b>：橙旗标示的雪包跳台，冲上台顶腾空，落地按腾空时长<b>加分</b>，空中还能轻微修方向</div>
+          <div><span class="dot">▸</span> <b>窄道</b>：木栅栏标示入口，两侧树墙收紧、地面有压雪车辙，稳住路线穿过去</div>
           <div><span class="dot">▸</span> <b>昼夜流转</b>：约 2 分半走完一轮——白天、黄昏、繁星极光夜、黎明，看右上角时段牌</div>
           <div><span class="dot">▸</span> 速度越快视野越开、风声越尖，活得越久分越高</div>
         </div>
@@ -408,6 +412,8 @@
         return h < 0.30 ? 1 : (h < 0.54 ? 2 : 0);
       }
       function zoneFactors(z) {
+        var dz2 = -z;
+        if (narrowFactorD(dz2) > 0.01 || jumpDistD(dz2) < 16) return { p: 0, i: 0 }; // 跳台/窄道处是普通压雪面，不与分区重叠
         var s = Math.floor(-z / ZONE_LEN);
         var t = segType(s);
         if (!t) return { p: 0, i: 0 };
@@ -417,6 +423,25 @@
         return t === 1 ? { p: f, i: 0 } : { p: 0, i: f };
       }
       var riderZone = { p: 0, i: 0 };
+
+      /* ================= 地形玩法轮换：跳台 / 窄道 =================
+         以 600m 为一个轮换周期：150m 处一座跳台、330–430m 一段窄道；
+         粉雪/冰面分区在这两处自动让路（见 zoneFactors），四种地形交替出现、
+         互不重叠，且每种地形都留出可通过的通道 */
+      var CYCLE_LEN = 600;
+      function narrowFactorD(d) {
+        var local = ((d % CYCLE_LEN) + CYCLE_LEN) % CYCLE_LEN;
+        if (local < 318 || local > 442) return 0;
+        var f = clamp(Math.min(local - 330, 430 - local) / 12, 0, 1);
+        return f * f * (3 - 2 * f);
+      }
+      function jumpDistD(d) {
+        var local = ((d % CYCLE_LEN) + CYCLE_LEN) % CYCLE_LEN;
+        var dd = Math.abs(local - 150);
+        return Math.min(dd, CYCLE_LEN - dd);
+      }
+      var rampHere = 0, prevRampH = 0, narrowHere = 0, airFromJump = false;
+      var extraColliders = []; // 窄道树墙 / 岩石 / 栅栏的碰撞体，由 refreshNarrow 重建
 
       /* 雪面纹理：中央压雪纹路（corduroy 细密平行线）+ 两侧雪沟/雪浪 + 雪道边缘沟槽 */
       function snowTexture() {
@@ -508,6 +533,8 @@
         for (var s = s0; s <= s1 && used < PATCH_N; s++) {
           var t = segType(s);
           if (!t) continue;
+          var cenD = s * ZONE_LEN + ZONE_LEN / 2;
+          if (narrowFactorD(cenD) > 0 || narrowFactorD(cenD - ZONE_LEN) > 0 || narrowFactorD(cenD + ZONE_LEN) > 0 || jumpDistD(cenD) < 68) continue; // 跳台/窄道处不铺分区盖层
           var zTop = -s * ZONE_LEN, zBot = zTop - ZONE_LEN;
           var pg = new THREE.PlaneGeometry(27.5, ZONE_LEN, 10, 18);
           pg.rotateX(-Math.PI / 2);
@@ -527,6 +554,99 @@
           mesh.visible = true;
         }
         for (var u = used; u < PATCH_N; u++) patchPool[u].visible = false;
+      }
+      /* ================= 跳台：雪包斜坡 + 两侧橙旗 =================
+         台面造型由 rampProfile 唯一定义（台顶高 1.18m、宽 6.4m、长约 11m、末端陡落），
+         视觉网格与物理隆起共用同一函数：骑上去什么样、台顶抛出多高，完全一致。
+         跳台只占雪道中央 6.4m，两侧留着宽通道，绕过去也畅通无阻 */
+      function rampProfile(lx, lz) {
+        var wf = Math.pow(Math.max(0, Math.cos(clamp(lx / 3.2, -1, 1) * Math.PI / 2)), 0.8);
+        var h;
+        if (lz > 5.6 || lz < -6.2) return 0;
+        if (lz >= -5) { var t = clamp((5 - lz) / 10, 0, 1); h = 1.18 * Math.pow(t, 1.65) * (0.3 + 0.7 * t); }
+        else { var u = clamp((-5 - lz) / 1.0, 0, 1); h = 1.18 * (1 - u) - 0.5 * u; }
+        return h * wf;
+      }
+      var rampTex = (function () {
+        var c = document.createElement('canvas'); c.width = c.height = 128;
+        var g = c.getContext('2d');
+        g.fillStyle = '#f9f0dc'; g.fillRect(0, 0, 128, 128);
+        for (var x = 4; x < 128; x += 8) { // 压雪纹路：沿下滑方向的细密平行线
+          g.fillStyle = 'rgba(176,158,128,0.4)'; g.fillRect(x, 0, 1.6, 128);
+          g.fillStyle = 'rgba(255,255,250,0.55)'; g.fillRect(x + 2.6, 0, 1.4, 128);
+        }
+        var t2 = new THREE.CanvasTexture(c);
+        t2.wrapS = t2.wrapT = THREE.RepeatWrapping; t2.repeat.set(2, 3);
+        return t2;
+      })();
+      function buildRampGeo() {
+        var NX = 10, NZ = 30, W = 6.4, L0 = 5.6, L1 = -6.2;
+        var verts = [], uvs = [], idx = [];
+        for (var iz = 0; iz <= NZ; iz++) {
+          var lz = L0 + (L1 - L0) * iz / NZ;
+          for (var ix = 0; ix <= NX; ix++) {
+            var lx = -W / 2 + W * ix / NX;
+            verts.push(lx, rampProfile(lx, lz), lz);
+            uvs.push(ix / NX * 2, iz / NZ * 3);
+          }
+        }
+        for (var jz = 0; jz < NZ; jz++) for (var jx = 0; jx < NX; jx++) {
+          var a = jz * (NX + 1) + jx, b = a + 1, c2 = a + NX + 1, d2 = c2 + 1;
+          idx.push(a, b, c2, b, d2, c2);
+        }
+        var geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(verts), 3));
+        geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uvs), 2));
+        geo.setIndex(idx);
+        geo.computeVertexNormals();
+        return geo;
+      }
+      var rampGeoShared = buildRampGeo();
+      var rampMat = new THREE.MeshStandardMaterial({ map: rampTex, roughness: 0.88 });
+      var rampPoleMat = new THREE.MeshStandardMaterial({ color: 0x2c3542, roughness: 0.6 });
+      var rampFlagMat = new THREE.MeshStandardMaterial({ color: 0xff7a1a, roughness: 0.55, side: THREE.DoubleSide });
+      var ramps = [];
+      for (var rpi = 0; rpi < 3; rpi++) {
+        var rgroup = new THREE.Group();
+        var rmound = new THREE.Mesh(rampGeoShared, rampMat);
+        rmound.receiveShadow = true;
+        rgroup.add(rmound);
+        [-1, 1].forEach(function (sd) { // 台顶两侧小旗标示
+          var pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.7, 6), rampPoleMat);
+          pole.position.set(sd * 3.05, 0.65, -5); pole.castShadow = true; rgroup.add(pole);
+          var fl = new THREE.Mesh(new THREE.PlaneGeometry(0.72, 0.44), rampFlagMat);
+          fl.position.set(sd * 3.05 - sd * 0.38, 1.32, -5); rgroup.add(fl);
+        });
+        scene.add(rgroup);
+        ramps.push({ group: rgroup, x: 0, z: 0, cycle: -1 });
+      }
+      function rampHeightAt(x, z) {
+        var best = 0;
+        for (var i = 0; i < ramps.length; i++) {
+          var r = ramps[i];
+          var lz = z - r.z;
+          if (lz > 6 || lz < -6.6) continue;
+          var lx = x - r.x;
+          if (Math.abs(lx) > 3.4) continue;
+          var h = rampProfile(lx, lz);
+          if (h > best) best = h;
+        }
+        return best;
+      }
+      /* 跳台跟着 600m 轮换周期走：每周期一座，落在周期 150m 处、谷底中心线上，
+         整组按当地坡度俯仰，台面始终贴着雪坡 */
+      function refreshRamps(pz) {
+        var baseCycle = Math.floor((-pz) / CYCLE_LEN);
+        for (var k = 0; k < ramps.length; k++) {
+          var cyc = baseCycle + k;
+          if (cyc < 0) cyc = 0;
+          var r = ramps[k];
+          r.z = -(cyc * CYCLE_LEN + 150);
+          r.x = valleyCenter(r.z);
+          r.cycle = cyc;
+          r.group.position.set(r.x, groundH(r.x, r.z) - 0.05, r.z);
+          r.group.rotation.x = -Math.atan2(groundH(r.x, r.z + 5.6) - groundH(r.x, r.z - 5.6), 11.2);
+        }
       }
       var CH_LEN = 120, CH_WID = 280, CH_NUM = 4; // 宽 280m：谷底 60m + 两侧裙边与缓坡都画进同一块地形，不露边
       var chunks = [];
@@ -662,6 +782,152 @@
         rockIM.instanceMatrix.needsUpdate = true;
         poleIM.instanceMatrix.needsUpdate = true;
         flagIM.instanceMatrix.needsUpdate = true;
+      }
+
+      /* ================= 窄道：两侧树墙 + 入口木栅栏 + 压雪车辙 =================
+         每周期 330–430m 一段：树墙收到谷底中心线 ±11m 外、道内障碍略密但左右交错
+         永远留一条线；物理收窄在主循环里按 narrowFactorD 同步（软边界 24m → 10.5m）。
+         树/石用独立实例池，refreshNarrow 按周期确定性重建，碰撞体进 extraColliders */
+      var NT_MAX = 120, NR_MAX = 30;
+      var nTrunkIM = new THREE.InstancedMesh(trunkIM.geometry, trunkIM.material, NT_MAX);
+      var nFolIM = new THREE.InstancedMesh(folIM.geometry, folIM.material, NT_MAX);
+      var nFol2IM = new THREE.InstancedMesh(fol2IM.geometry, fol2IM.material, NT_MAX);
+      var nPineIM = new THREE.InstancedMesh(pineIM.geometry, pineIM.material, NT_MAX);
+      var nPineTopIM = new THREE.InstancedMesh(pineTopIM.geometry, pineTopIM.material, NT_MAX);
+      var nRockIM = new THREE.InstancedMesh(rockIM.geometry, rockIM.material, NR_MAX);
+      [nTrunkIM, nFolIM, nFol2IM, nPineIM, nPineTopIM, nRockIM].forEach(function (m) {
+        m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        m.castShadow = true; m.frustumCulled = false; scene.add(m);
+      });
+      for (var nhi = 0; nhi < NT_MAX; nhi++) { hideInst(nTrunkIM, nhi); hideInst(nFolIM, nhi); hideInst(nFol2IM, nhi); hideInst(nPineIM, nhi); hideInst(nPineTopIM, nhi); }
+      for (var nri = 0; nri < NR_MAX; nri++) hideInst(nRockIM, nri);
+      function placeNarrowTree(slot, x, z, rnd) {
+        var ty = groundH(x, z);
+        var sc = 0.85 + rnd() * 0.7;
+        if (rnd() < 0.42) { // 矮胖松树
+          setInst(nTrunkIM, slot, x, ty + 0.55 * sc, z, rnd() * 3, sc * 1.25, sc * 0.7, sc * 1.25);
+          setInst(nPineIM, slot, x, ty + (1.0 + 1.55) * sc, z, rnd() * 3, sc, sc, sc);
+          setInst(nPineTopIM, slot, x, ty + (1.0 + 3.1) * sc, z, rnd() * 3, sc, sc, sc);
+          hideInst(nFolIM, slot); hideInst(nFol2IM, slot);
+        } else { // 高瘦云杉
+          setInst(nTrunkIM, slot, x, ty + 0.8 * sc, z, rnd() * 3, sc, sc, sc);
+          setInst(nFolIM, slot, x, ty + (1.6 + 2.6) * sc, z, rnd() * 3, sc, sc, sc);
+          setInst(nFol2IM, slot, x, ty + (1.6 + 4.6) * sc, z, rnd() * 3, sc, sc, sc);
+          hideInst(nPineIM, slot); hideInst(nPineTopIM, slot);
+        }
+      }
+      var woodMat = new THREE.MeshStandardMaterial({ color: 0x7a5a38, roughness: 0.9 });
+      function makeFence() { // 窄道入口：两根立柱 + 向外张开的双横木栅栏 + 橙色小旗
+        var g = new THREE.Group();
+        [-1, 1].forEach(function (sd) {
+          var post = new THREE.Mesh(new THREE.BoxGeometry(0.16, 1.7, 0.16), woodMat);
+          post.position.set(sd * 9.2, 0.85, 0); post.castShadow = true; g.add(post);
+          [1.28, 0.72].forEach(function (ryy) {
+            var rail = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.1, 0.06), woodMat);
+            rail.position.set(sd * 11.05, ryy, 0.62); rail.rotation.y = sd * 0.55; rail.castShadow = true; g.add(rail);
+          });
+          var fl = new THREE.Mesh(new THREE.PlaneGeometry(0.55, 0.36), rampFlagMat);
+          fl.position.set(sd * 9.2 - sd * 0.3, 1.52, 0); g.add(fl);
+        });
+        return g;
+      }
+      var fences = [makeFence(), makeFence(), makeFence()];
+      fences.forEach(function (f) { f.visible = false; scene.add(f); });
+      /* 压雪车辙纹理：两条履带压痕（深色软边带 + 中心深线），透明底 */
+      var rutTex = (function () {
+        var c = document.createElement('canvas'); c.width = 256; c.height = 256;
+        var g = c.getContext('2d');
+        g.clearRect(0, 0, 256, 256);
+        [64, 192].forEach(function (cx) {
+          for (var w = 15; w > 0; w -= 3) {
+            g.fillStyle = 'rgba(96,108,132,' + (0.05 + (15 - w) * 0.012) + ')';
+            g.fillRect(cx - w, 0, w * 2, 256);
+          }
+          g.fillStyle = 'rgba(70,82,104,0.28)'; g.fillRect(cx - 2, 0, 4, 256);
+        });
+        var t3 = new THREE.CanvasTexture(c);
+        t3.wrapS = THREE.ClampToEdgeWrapping; t3.wrapT = THREE.RepeatWrapping; t3.repeat.set(1, 4);
+        return t3;
+      })();
+      var rutMat = new THREE.MeshStandardMaterial({ map: rutTex, transparent: true, roughness: 1, depthWrite: false });
+      var ruts = [];
+      for (var rui = 0; rui < 3; rui++) {
+        var rum = new THREE.Mesh(new THREE.BufferGeometry(), rutMat);
+        rum.renderOrder = 1; rum.frustumCulled = false; rum.visible = false;
+        scene.add(rum); ruts.push(rum);
+      }
+      function refreshNarrow(pz) {
+        var baseCycle = Math.floor(((-pz) - 60) / CYCLE_LEN);
+        var ti = 0, ri = 0;
+        extraColliders.length = 0;
+        for (var k = 0; k < 3; k++) {
+          var fence = fences[k], rut = ruts[k];
+          var cyc = baseCycle + k;
+          if (cyc < 0) { fence.visible = false; rut.visible = false; continue; }
+          var secD0 = cyc * CYCLE_LEN + 330;
+          var z0 = -secD0, cenZ = z0 - 50;
+          var rnd = mulberry32(9100 + cyc * 137);
+          /* 两侧树墙：每 5–8m 一棵，贴着 ±11–14m 立着，把谷底视觉上收紧 */
+          for (var s = 5; s < 99; s += 5 + rnd() * 3) {
+            for (var sd2 = 0; sd2 < 2; sd2++) {
+              if (ti >= NT_MAX) break;
+              var side = sd2 === 0 ? -1 : 1;
+              var zz = -(secD0 + s + (rnd() * 2.4 - 1.2));
+              var xx = valleyCenter(zz) + side * (11.3 + rnd() * 3.1);
+              placeNarrowTree(ti, xx, zz, rnd);
+              extraColliders.push({ x: xx, z: zz, r: 0.85, kind: 'tree', near: false });
+              ti++;
+            }
+          }
+          /* 道内障碍：左右交错、间距 11–17m，对侧永远空着——密度略高但不堵路 */
+          for (var s2 = 15; s2 < 95; s2 += 11 + rnd() * 6) {
+            var side2 = (Math.floor(s2 / 13) % 2 === 0) ? 1 : -1;
+            if (rnd() < 0.3) side2 = -side2;
+            var zz2 = -(secD0 + s2);
+            var xx2 = valleyCenter(zz2) + side2 * (4.3 + rnd() * 3.2);
+            if (rnd() < 0.3 && ri < NR_MAX) {
+              var rs2 = 0.6 + rnd() * 0.7;
+              dummy.position.set(xx2, groundH(xx2, zz2) + rs2 * 0.3, zz2);
+              dummy.rotation.set(rnd() * 3, rnd() * 3, rnd() * 3);
+              dummy.scale.set(rs2, rs2 * 0.72, rs2);
+              dummy.updateMatrix();
+              nRockIM.setMatrixAt(ri, dummy.matrix);
+              extraColliders.push({ x: xx2, z: zz2, r: rs2 * 0.95 + 0.2, kind: 'rock', near: false });
+              ri++;
+            } else if (ti < NT_MAX) {
+              placeNarrowTree(ti, xx2, zz2, rnd);
+              extraColliders.push({ x: xx2, z: zz2, r: 0.8, kind: 'tree', near: false });
+              ti++;
+            }
+          }
+          /* 入口木栅栏 */
+          var fvc = valleyCenter(z0);
+          fence.position.set(fvc, groundH(fvc, z0), z0);
+          fence.visible = true;
+          extraColliders.push({ x: fvc - 9.2, z: z0, r: 0.4, kind: 'fence', near: false });
+          extraColliders.push({ x: fvc + 9.2, z: z0, r: 0.4, kind: 'fence', near: false });
+          /* 压雪车辙盖层：几何直接建在世界坐标里，贴着谷底中心线弯 */
+          var rg = new THREE.PlaneGeometry(15.5, 100, 6, 30);
+          rg.rotateX(-Math.PI / 2);
+          var rp = rg.attributes.position;
+          for (var vi = 0; vi < rp.count; vi++) {
+            var wz = cenZ + rp.getZ(vi);
+            var wx = valleyCenter(wz) + rp.getX(vi);
+            rp.setX(vi, wx); rp.setZ(vi, wz);
+            rp.setY(vi, groundH(wx, wz) + 0.04);
+          }
+          rg.computeVertexNormals();
+          rut.geometry.dispose(); rut.geometry = rg;
+          rut.visible = true;
+        }
+        for (var h1 = ti; h1 < NT_MAX; h1++) { hideInst(nTrunkIM, h1); hideInst(nFolIM, h1); hideInst(nFol2IM, h1); hideInst(nPineIM, h1); hideInst(nPineTopIM, h1); }
+        for (var h2 = ri; h2 < NR_MAX; h2++) hideInst(nRockIM, h2);
+        nTrunkIM.instanceMatrix.needsUpdate = true;
+        nFolIM.instanceMatrix.needsUpdate = true;
+        nFol2IM.instanceMatrix.needsUpdate = true;
+        nPineIM.instanceMatrix.needsUpdate = true;
+        nPineTopIM.instanceMatrix.needsUpdate = true;
+        nRockIM.instanceMatrix.needsUpdate = true;
       }
 
       var colBase = new THREE.Color(0.96, 0.925, 0.855);
@@ -1207,15 +1473,26 @@
       var muteBtn = document.getElementById('muteBtn');
       var hDist = document.getElementById('hDist'), hSpeed = document.getElementById('hSpeed'), hScore = document.getElementById('hScore'), hPhase = document.getElementById('hPhase');
       var popup = document.getElementById('popup');
-      /* 雪质提示牌 #zoneTag：只在分区切换时改 DOM（每帧调用、状态没变就直接返回）。
-         粉雪 → 白牌「粉雪区」；冰面 → 蓝牌「冰面」；普通压雪 → 熄灭。 */
+      /* 地形提示牌 #zoneTag：只在地形切换时改 DOM（每帧调用、状态没变就直接返回）。
+         优先级：跳台 > 窄道 > 粉雪 > 冰面（四种地形互不重叠，优先级只是保险）；
+         普通压雪 → 熄灭 */
       var zoneTagEl = document.getElementById('zoneTag');
       var lastZoneKey = '';
       function updateZoneTag() {
-        var key = riderZone.p > 0.3 ? 'powder' : (riderZone.i > 0.3 ? 'ice' : '');
+        var key = '';
+        if (rampHere > 0.04 || (airGap > 0.05 && airFromJump)) key = 'jump';
+        else if (narrowHere > 0.35) key = 'narrow';
+        else if (riderZone.p > 0.3) key = 'powder';
+        else if (riderZone.i > 0.3) key = 'ice';
         if (key === lastZoneKey) return;
         lastZoneKey = key;
-        if (key === 'powder') {
+        if (key === 'jump') {
+          zoneTagEl.textContent = '跳台 JUMP · 冲上台顶，腾空计分';
+          zoneTagEl.className = 'on jump';
+        } else if (key === 'narrow') {
+          zoneTagEl.textContent = '窄道 NARROW · 两侧收紧，稳住路线';
+          zoneTagEl.className = 'on narrow';
+        } else if (key === 'powder') {
           zoneTagEl.textContent = '粉雪区 POWDER · 松软减速，扬雪中';
           zoneTagEl.className = 'on powder';
         } else if (key === 'ice') {
@@ -1237,6 +1514,7 @@
         riderY = groundH(0, 0); prevGroundY = riderY; riderVy = 0; airGap = 0; airTime = 0;
         landDip = 0; crouchPulse = 0; prevSteerSign = 0; poseLean = 0; poseCrouch = 0.4;
         riderZone = { p: 0, i: 0 }; lastZoneKey = ''; zoneTagEl.className = '';
+        rampHere = 0; prevRampH = 0; narrowHere = 0; airFromJump = false;
         rider.rotation.set(0, 0, 0);
         for (var i = 0; i < chunks.length; i++) {
           var ch = chunks[i];
@@ -1253,6 +1531,8 @@
           m.userData.relZ = -(50 + m.userData.layer * 58) - (L.span / L.n) * k - Math.random() * 22;
         });
         refreshPatches(0);
+        refreshRamps(0);
+        refreshNarrow(0);
         rider.position.set(0, groundH(0, 0), 0);
         camPos.set(0, groundH(0, 0) + 5.8, 11.5); camX = 0;
       }
@@ -1478,6 +1758,7 @@
             elapsed += dt;
             /* 雪质手感：粉雪拖住板（轻微减速）；冰面更滑（轻微加速）且转向迟钝半拍 */
             riderZone = zoneFactors(pz);
+            narrowHere = narrowFactorD(-pz);
             var maxSpeed = Math.min(31, 24 + elapsed * 0.12) + riderZone.i * 2.5 - riderZone.p * 3; // 粉雪封顶更低、冰面封顶更高
             updateZoneTag(); // 进入/离开分区当帧切换提示牌
             /* 分区粒子外观：粉雪雾团更大更白；冰面几乎不扬雪、只剩细碎冰屑感（点更小、更透） */
@@ -1494,12 +1775,14 @@
                （主坡 70m 外才起），主角永远爬不上山坡、钻不进山体 */
             var vcNow = valleyCenter(pz);
             var localX = px - vcNow;
-            var edgeOver = Math.abs(localX) - 24;
-            var targetLat = steerVis * (6.5 + speed * 0.34) * (1 - riderZone.i * 0.3);
+            var softW = lerp(24, 10.5, narrowHere); // 窄道里软边界同步收紧到树墙内侧
+            var edgeOver = Math.abs(localX) - softW;
+            /* 转向手感按地形分化：冰面迟钝、粉雪沉重、腾空时只能轻微修方向 */
+            var targetLat = steerVis * (6.5 + speed * 0.34) * (1 - riderZone.i * 0.3) * (1 - riderZone.p * 0.22) * (airGap > 0.03 ? 0.45 : 1);
             if (edgeOver > 0 && localX !== 0 && Math.sign(targetLat) === Math.sign(localX)) {
               targetLat *= clamp(1 - edgeOver * 0.14, 0.22, 1); // 越往外、转向越钝
             }
-            var latK = (1 - Math.pow(0.0005, dt)) * (1 - riderZone.i * 0.5); // 冰面响应变慢
+            var latK = (1 - Math.pow(0.0005, dt)) * (1 - riderZone.i * 0.5) * (1 - riderZone.p * 0.2); // 冰面响应变慢、粉雪转向变沉
             latVel = lerp(latVel, targetLat, latK);
             px += latVel * dt;
             if (edgeOver > 0) {
@@ -1507,7 +1790,8 @@
               px -= Math.sign(localX) * edgeOver * (1 - Math.pow(0.004, dt)); // 弹簧式回推：越界越深推得越狠
             }
             var localNow = px - vcNow;
-            if (Math.abs(localNow) > 33) { px = vcNow + clamp(localNow, -33, 33); latVel *= 0.35; }
+            var hardW = lerp(33, 15, narrowHere);
+            if (Math.abs(localNow) > hardW) { px = vcNow + clamp(localNow, -hardW, hardW); latVel *= 0.35; }
             prevZ = pz;
             pz -= speed * dt;
             distance += speed * dt;
@@ -1546,8 +1830,25 @@
                 }
               }
             }
+            /* 窄道碰撞体（树墙 / 道内树石 / 栅栏立柱）与主道同规则：撞上结算、擦身 +10 */
+            if (!crashed) {
+              for (var ek = 0; ek < extraColliders.length; ek++) {
+                var ec = extraColliders[ek];
+                var edz = ec.z - pz;
+                if (edz > 3 || edz < -3) continue;
+                var edx = ec.x - px;
+                var ed2 = edx * edx + edz * edz;
+                var err2 = ec.r + 0.42;
+                if (ed2 < err2 * err2) { crashed = ec; break; }
+                if (!ec.near && Math.abs(edz) < 0.9 && ed2 < Math.pow(err2 + 1.15, 2)) {
+                  ec.near = true; gateBonus += 10;
+                  showPopup('+10 擦身！');
+                  blip(520, 760, 0.1, 'triangle', 0.1);
+                }
+              }
+            }
             if (crashed) {
-              endGame(crashed.kind === 'tree' ? '撞上了松树 — 下次提前压刃变线' : '磕上了岩石 — 岩石比板硬，先躲为敬');
+              endGame(crashed.kind === 'tree' ? '撞上了松树 — 下次提前压刃变线' : (crashed.kind === 'fence' ? '撞上了木栅栏 — 窄道入口别贴边' : '磕上了岩石 — 岩石比板硬，先躲为敬'));
             }
             /* 雪雾：直滑只有板尾细雪；压刃越深、速度越快，板刃外侧喷得越猛 */
             var carve = Math.abs(steerVis);
@@ -1581,7 +1882,8 @@
             if (AC && windGain && !muted) {
               var sf = speed / 31; // 0..1 速度比
               windGain.gain.setTargetAtTime(0.025 + Math.pow(sf, 1.5) * 0.17, AC.currentTime, 0.15);
-              windFilter.frequency.setTargetAtTime(280 + speed * 46 + carve * 320, AC.currentTime, 0.12);
+              /* 风声质感随雪面变：粉雪闷（低通压低）、冰面亮（低通抬高，像刮冰的嘶声） */
+              windFilter.frequency.setTargetAtTime((280 + speed * 46 + carve * 320) * (1 - riderZone.p * 0.3 + riderZone.i * 0.18), AC.currentTime, 0.12);
               if (windBP && windBPGain) {
                 windBP.frequency.setTargetAtTime(420 + speed * 52 + carve * 380, AC.currentTime, 0.12);
                 windBPGain.gain.setTargetAtTime(Math.pow(sf, 2) * 0.11, AC.currentTime, 0.15);
@@ -1616,7 +1918,8 @@
             var carveN = Math.abs(steerVis);
             /* 纵向物理：贴地时跟住地形；地面骤降（冲过雪包顶）时以跃起前的纵速离雪，
                重力拉回，落地按冲击量下蹲缓冲并扬起一圈雪雾 */
-            var gy = ry;
+            rampHere = rampHeightAt(px, pz);
+            var gy = ry + rampHere; // 有效地面 = 地形 + 跳台隆起，骑台/离台都走这一条
             var gVel = dt > 0.0001 ? (gy - prevGroundY) / dt : 0;
             if (airGap > 0.03) {
               riderVy -= 26 * dt;
@@ -1624,18 +1927,37 @@
               airTime += dt;
               if (riderY <= gy) {
                 riderY = gy;
-                var impact = -riderVy; riderVy = 0; airGap = 0; airTime = 0;
+                var impact = -riderVy; riderVy = 0; airGap = 0;
+                /* 腾空计分：滞空越久分越高（跳台抛出的长腾空最赚，小雪包颠一下不计） */
+                if (state === 'play' && airTime >= 0.35) {
+                  var airPts = Math.round(airTime * 60);
+                  gateBonus += airPts;
+                  showPopup('腾空 +' + airPts);
+                  blip(620, 990, 0.15, 'triangle', 0.16);
+                }
+                airTime = 0;
                 landDip = clamp(impact * 0.1, 0.12, 0.8);
-                if (impact > 2.3 && state === 'play') { burstSpray(15, 1.15); burstPuff(7, 1); }
+                if (impact > 2.3 && state === 'play') {
+                  if (airFromJump) { burstSpray(24, 1.35); burstPuff(10, 1.15); } // 跳台落地：一大圈雪雾
+                  else { burstSpray(15, 1.15); burstPuff(7, 1); }
+                }
+                airFromJump = false;
               } else airGap = riderY - gy;
             } else {
               riderY = gy; airGap = 0;
-              if (state === 'play' && gVel < -1.7 && riderVy > -0.4 && speed > 13) {
+              if (state === 'play' && prevRampH > 0.55 && rampHere < prevRampH - 0.32 && speed > 12) {
+                /* 冲出跳台台顶：按当前速度沿台面抛离雪面（速度越快飞得越远），
+                   空中姿态沿用既有逻辑：先蹬伸、后收腿，落地深蹲缓冲 */
+                riderVy = clamp(speed * 0.3, 3.0, 6.8);
+                riderY = gy + 0.05; airGap = 0.05; airTime = 0; airFromJump = true;
+                blip(240, 540, 0.2, 'sine', 0.07);
+              } else if (state === 'play' && gVel < -1.7 && riderVy > -0.4 && speed > 13) {
                 riderVy = clamp(riderVy, -0.4, 1.2); // 以跃起前的纵速离雪（蹬伸瞬间）
                 riderY = gy + 0.04; airGap = 0.04; airTime = 0;
               } else riderVy = gVel;
             }
             prevGroundY = gy;
+            prevRampH = rampHere;
             var airBlend = clamp(airGap * 3.0, 0, 1);
             landDip = Math.max(0, landDip - dt * 1.9);
             crouchPulse = Math.max(0, crouchPulse - dt * 1.6);
@@ -1651,7 +1973,10 @@
             rider.position.set(px, riderY + 0.02, pz);
             rider.rotation.x = damp(rider.rotation.x, pitchT, 0.002, dt);
             rider.rotation.z = damp(rider.rotation.z, -poseLean, 0.0012, dt);
-            rider.rotation.y = damp(rider.rotation.y, steerVis * 0.3, 0.004, dt);
+            /* 冰面打滑：板尾轻微左右摆动（只动视觉，路线仍由惯性主导） */
+            var iceWag = (airBlend < 0.1 && state === 'play') ? Math.sin(tNow * 6.4) * 0.06 * riderZone.i : 0;
+            rider.rotation.y = damp(rider.rotation.y, steerVis * 0.3 + iceWag, 0.004, dt);
+            boardG.rotation.y = iceWag * 0.8;
             boardG.rotation.z = damp(boardG.rotation.z, -poseLean * 0.32, 0.0012, dt); // 板面比身体多压一截刃
             bodyG.rotation.z = damp(bodyG.rotation.z, -poseLean * 0.16, 0.002, dt);
             var bob = Math.sin(tNow * (state === 'play' ? 7 : 2)) * (state === 'play' ? 0.028 : 0.014) * (1 - airBlend);
@@ -1677,6 +2002,8 @@
                 buildChunkGeo(ch2);
                 scatterChunk(ch2, false);
                 refreshPatches(pz);
+                refreshRamps(pz);
+                refreshNarrow(pz);
               }
             }
           }
