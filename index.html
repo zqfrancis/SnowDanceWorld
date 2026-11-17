@@ -289,7 +289,7 @@
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
       renderer.setSize(window.innerWidth, window.innerHeight);
       renderer.shadowMap.enabled = true;
-      renderer.shadowMap.type = THREE.PCFShadowMap;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap; // 软阴影：影边羽化过渡，不再一条黑线切开雪道
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
       renderer.toneMappingExposure = 1.14;
       container.appendChild(renderer.domElement);
@@ -325,10 +325,25 @@
       sun.shadow.camera.near = 1; sun.shadow.camera.far = 260;
       sun.shadow.bias = -0.00045;
       sun.shadow.normalBias = 0.03;
+      /* 阴影强度封顶：影子最多压暗约一半，影内始终保留 ~45% 光——雪面在影里是淡蓝灰、
+         树/旗门/雪道边缘都看得清，绝不全黑（昼夜两段在 updateDayNight 里再微调） */
+      sun.shadow.intensity = 0.55;
+      sun.shadow.radius = 5; // 配合软阴影把影边再抹开一层
       scene.add(sun); scene.add(sun.target);
       var fill = new THREE.DirectionalLight(0x7e9fd4, 0.34); // 阴影面冷蓝补光，和暖光拉出冷暖对比
       fill.position.set(-30, 26, 30);
       scene.add(fill); scene.add(fill.target);
+      /* 环境光地板：与昼夜无关的一层保底亮度，保证任何时段、任何影子里雪面都不沉到黑；
+         强度/色温在 updateDayNight 里跟天色走（夜里略抬、转冷蓝月色） */
+      var ambFloor = new THREE.AmbientLight(0xcfe0f5, 0.32);
+      scene.add(ambFloor);
+      /* 跟随补光：跟着主角走的一盏柔光，悬在主角前方约 8m、上方约 4m，只铺亮周围约 30m 的
+         前方雪面、树和旗门——滑进山影里，前方路面照样看得清。暖色低强度，不照平全场、
+         不抢金色时刻的氛围；夜里自动转冷月色并略增强（参数在 updateDayNight 里按 ENV 算） */
+      var riderFill = new THREE.PointLight(0xffd9a6, 9, 36, 1.35);
+      riderFill.position.set(0, 5, -8);
+      scene.add(riderFill);
+      var RIDER_FILL_WARM = new THREE.Color(0xffd9a6), RIDER_FILL_COOL = new THREE.Color(0xaec8ff);
       /* 天空穹顶：渐变 + 太阳光晕（低太阳方向一团暖辉，地平线一带金边） */
       var skyUni = {
         topColor: { value: new THREE.Color(0x3a68b8) },
@@ -1787,16 +1802,18 @@
         { p: 0.00, top: 0x2e63c8, hor: 0xd8e8f8, fog: 0xdfeaf4, fogFar: 420, sun: 0xfff1d8, sunI: 2.0, hemiSky: 0xbfd8ff, hemiGnd: 0xe9eef0, hemiI: 0.8, fillI: 0.3, glow: 0xffe9bb, glowAmt: 0.3, expo: 1.12, lx: 26, ly: 80, lz: -42, star: 0, aurora: 0, night: 0, rough: 0.9, glit: 0.45, disc: 1.0 },
         // 午后转暖：太阳西斜、光色渐金，仍是白天
         { p: 0.24, top: 0x3568bd, hor: 0xe8dfc8, fog: 0xe9dfc9, fogFar: 400, sun: 0xffeec9, sunI: 1.9, hemiSky: 0xb4cdef, hemiGnd: 0xf2e6cc, hemiI: 0.72, fillI: 0.32, glow: 0xffdf9e, glowAmt: 0.5, expo: 1.13, lx: 38, ly: 55, lz: -48, star: 0, aurora: 0, night: 0, rough: 0.89, glit: 0.6, disc: 1.0 },
-        // 黄昏：金色时刻——低角度暖太阳、长影、逆光雪粒（沿用原金色时刻调色）
-        { p: 0.38, top: 0x232f63, hor: 0xff9a4e, fog: 0xdd9a68, fogFar: 360, sun: 0xff7e33, sunI: 1.3, hemiSky: 0x8fa3d9, hemiGnd: 0xf7d9ae, hemiI: 0.42, fillI: 0.3, glow: 0xff7a2e, glowAmt: 1.15, expo: 1.08, lx: 46, ly: 13, lz: -52, star: 0.05, aurora: 0, night: 0.12, rough: 0.88, glit: 1.0, disc: 1.05 },
+        // 黄昏：金色时刻——低角度暖太阳、长影、逆光雪粒（沿用原金色时刻调色）。
+        // 光位横向分量已收拢（lx 46→30、ly 13→19，深黄昏/黎明同理）：影子改沿山谷纵向拉长、
+        // 不再横扫盖住半边谷底，谷底中央始终留一条受光带，左右横滑也不会久陷全黑山影
+        { p: 0.38, top: 0x232f63, hor: 0xff9a4e, fog: 0xdd9a68, fogFar: 360, sun: 0xff7e33, sunI: 1.3, hemiSky: 0x8fa3d9, hemiGnd: 0xf7d9ae, hemiI: 0.62, fillI: 0.32, glow: 0xff7a2e, glowAmt: 1.15, expo: 1.08, lx: 30, ly: 19, lz: -52, star: 0.05, aurora: 0, night: 0.12, rough: 0.88, glit: 1.0, disc: 1.05 },
         // 深黄昏：太阳贴地、橙红压到最深，星星开始露头
-        { p: 0.50, top: 0x1a2148, hor: 0xf2703f, fog: 0xb97a5e, fogFar: 330, sun: 0xff5f2a, sunI: 0.85, hemiSky: 0x5f6fa8, hemiGnd: 0xc99a76, hemiI: 0.34, fillI: 0.24, glow: 0xff5f24, glowAmt: 1.25, expo: 1.06, lx: 50, ly: 6, lz: -50, star: 0.35, aurora: 0, night: 0.4, rough: 0.86, glit: 0.85, disc: 1.1 },
+        { p: 0.50, top: 0x1a2148, hor: 0xf2703f, fog: 0xb97a5e, fogFar: 330, sun: 0xff5f2a, sunI: 0.85, hemiSky: 0x5f6fa8, hemiGnd: 0xc99a76, hemiI: 0.58, fillI: 0.3, glow: 0xff5f24, glowAmt: 1.25, expo: 1.06, lx: 33, ly: 12, lz: -50, star: 0.35, aurora: 0, night: 0.4, rough: 0.86, glit: 0.85, disc: 1.1 },
         // 极光夜：深蓝夜空、繁星、冷色月光 + 雪面月光反光，绿色极光带缓缓流动
-        { p: 0.63, top: 0x050b21, hor: 0x101f3a, fog: 0x0c1930, fogFar: 300, sun: 0xa9c4ff, sunI: 0.8, hemiSky: 0x2e4470, hemiGnd: 0x131c2e, hemiI: 0.5, fillI: 0.16, glow: 0xbdd2ff, glowAmt: 0.55, expo: 1.07, lx: -36, ly: 58, lz: -40, star: 1, aurora: 0.9, night: 1, rough: 0.55, glit: 0.12, disc: 0.36 },
+        { p: 0.63, top: 0x050b21, hor: 0x101f3a, fog: 0x0c1930, fogFar: 300, sun: 0xa9c4ff, sunI: 0.8, hemiSky: 0x2e4470, hemiGnd: 0x131c2e, hemiI: 0.56, fillI: 0.26, glow: 0xbdd2ff, glowAmt: 0.55, expo: 1.07, lx: -36, ly: 58, lz: -40, star: 1, aurora: 0.9, night: 1, rough: 0.55, glit: 0.12, disc: 0.36 },
         // 夜深：月亮爬得更高，极光最盛
-        { p: 0.80, top: 0x040a1e, hor: 0x0e1c34, fog: 0x0a1628, fogFar: 290, sun: 0xa9c4ff, sunI: 0.85, hemiSky: 0x2c4270, hemiGnd: 0x121a2c, hemiI: 0.5, fillI: 0.16, glow: 0xbdd2ff, glowAmt: 0.5, expo: 1.07, lx: -20, ly: 66, lz: -48, star: 1, aurora: 1, night: 1, rough: 0.55, glit: 0.12, disc: 0.36 },
+        { p: 0.80, top: 0x040a1e, hor: 0x0e1c34, fog: 0x0a1628, fogFar: 290, sun: 0xa9c4ff, sunI: 0.85, hemiSky: 0x2c4270, hemiGnd: 0x121a2c, hemiI: 0.56, fillI: 0.26, glow: 0xbdd2ff, glowAmt: 0.5, expo: 1.07, lx: -20, ly: 66, lz: -48, star: 1, aurora: 1, night: 1, rough: 0.55, glit: 0.12, disc: 0.36 },
         // 黎明：东方（+X）地平线粉紫霞光渐亮，星星与极光退场
-        { p: 0.89, top: 0x35406e, hor: 0xeda3c0, fog: 0xc7a0b4, fogFar: 330, sun: 0xffab72, sunI: 1.05, hemiSky: 0x7d84b8, hemiGnd: 0xd9b49a, hemiI: 0.45, fillI: 0.26, glow: 0xff9ec4, glowAmt: 1.05, expo: 1.09, lx: 54, ly: 8, lz: -44, star: 0.12, aurora: 0, night: 0.3, rough: 0.87, glit: 0.6, disc: 1.0 },
+        { p: 0.89, top: 0x35406e, hor: 0xeda3c0, fog: 0xc7a0b4, fogFar: 330, sun: 0xffab72, sunI: 1.05, hemiSky: 0x7d84b8, hemiGnd: 0xd9b49a, hemiI: 0.6, fillI: 0.3, glow: 0xff9ec4, glowAmt: 1.05, expo: 1.09, lx: 36, ly: 14, lz: -44, star: 0.12, aurora: 0, night: 0.3, rough: 0.87, glit: 0.6, disc: 1.0 },
         // 清晨：霞光收尽，回到明亮白天（与首帧平滑衔接成环）
         { p: 0.965, top: 0x2f66cc, hor: 0xdcecf7, fog: 0xe2ecf4, fogFar: 410, sun: 0xfff3da, sunI: 1.95, hemiSky: 0xbfd8ff, hemiGnd: 0xe9eef0, hemiI: 0.78, fillI: 0.3, glow: 0xffe9bb, glowAmt: 0.35, expo: 1.12, lx: 34, ly: 68, lz: -44, star: 0, aurora: 0, night: 0, rough: 0.9, glit: 0.4, disc: 1.0 }
       ];
@@ -1841,8 +1858,18 @@
         sun.intensity = ENV.sunI;
         hemi.color.copy(ENV.hemiSkyC);
         hemi.groundColor.copy(ENV.hemiGndC);
-        hemi.intensity = ENV.hemiI;
-        fill.intensity = ENV.fillI;
+        /* 阴影亮度下限（全时段生效）：半球光/补光不低于这条线 + 环境光地板 + 阴影强度封顶，
+           三者叠加保证影内雪面保留约一半环境光、呈淡蓝灰，起伏/树/旗门/雪道边缘都可辨；
+           夜里下限略低但月光段另有 ambFloor 与跟随补光兜底，同样不出现全黑盲区 */
+        hemi.intensity = Math.max(ENV.hemiI, lerp(0.68, 0.58, ENV.night));
+        fill.intensity = Math.max(ENV.fillI, lerp(0.34, 0.28, ENV.night));
+        ambFloor.intensity = 0.3 + ENV.night * 0.16;
+        ambFloor.color.copy(ENV.hemiSkyC).lerp(ENV.glowC, 0.25 * (1 - ENV.night));
+        sun.shadow.intensity = lerp(0.55, 0.45, ENV.night); // 夜里月影再淡一档
+        /* 跟随补光强度/色温：太阳越低、天越黑，补光越明显；正午只留一层几乎察觉不到的柔光，
+           绝不把场景照平。夜里转冷月色，替月光把雪道、树和旗门兜亮 */
+        riderFill.intensity = 7 + (1 - clamp(ENV.sunI / 2, 0, 1)) * 7 + ENV.night * 3.5;
+        riderFill.color.copy(RIDER_FILL_WARM).lerp(RIDER_FILL_COOL, ENV.night);
         renderer.toneMappingExposure = ENV.expo;
         /* 太阳盘：白天是日轮、黄昏涨大、夜里缩成一轮冷月（位置在主循环里按 ENV 光位摆放） */
         sunSprite.material.color.copy(ENV.sunC).lerp(DN_WHITE, 0.35);
@@ -2277,6 +2304,9 @@
           sun.target.position.set(px - 6, ry, pz + 6);
           fill.position.set(px - 34, ry + 26, pz + 26);
           fill.target.position.set(px, ry, pz - 10);
+          /* 跟随补光跟走：悬在主角前方约 8m、上方约 4m——正好铺亮相机视线正对着的前方雪面，
+             主角滑到谷底哪一侧、钻进哪片山影，脚下和前方约 30m 始终有光 */
+          riderFill.position.set(px, riderY + 4.2, pz - 8);
           var sd = new THREE.Vector3(ENV.lx, ENV.ly, ENV.lz).normalize();
           skyUni.sunDir.value.copy(sd);
           sunSprite.position.set(camera.position.x + sd.x * 780, camera.position.y + sd.y * 780, camera.position.z + sd.z * 780);
