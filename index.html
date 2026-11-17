@@ -31,10 +31,28 @@
       }
       #hud.on { display: flex; }
       .hudbar {
-        display: flex; gap: 0; background: rgba(8, 20, 38, .62);
+        display: flex; gap: 0; background: rgba(8, 20, 38, .62); align-items: center;
         border: 1px solid rgba(160, 200, 245, .28); border-radius: 10px;
         backdrop-filter: blur(6px); overflow: hidden;
       }
+      /* ---------- 速度表：表盘 + 指针 + 数字，颜色随速度冷→暖，高速发光 ---------- */
+      .gaugeCell { display: flex; align-items: center; padding: 4px 6px 4px 9px; }
+      #gauge { position: relative; width: 74px; height: 74px; flex: none; }
+      #gauge svg { width: 100%; height: 100%; display: block; }
+      #gauge.hot svg { filter: drop-shadow(0 0 8px rgba(255, 118, 40, .9)); }
+      .gNum {
+        position: absolute; left: 0; right: 0; top: 55%; text-align: center;
+        font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.05;
+      }
+      #gauge.hot .gNum { font-weight: 900; }
+      .gNum small { display: block; font-size: 8px; letter-spacing: .14em; color: #9fc2e8; font-weight: 500; }
+      /* ---------- 连击：倍率数字 + 剩余时间条，越高越亮 ---------- */
+      #comboStat { min-width: 78px; }
+      #comboStat .val { transition: color .2s ease; }
+      #comboStat.bump .val { animation: cbump .35s ease-out; }
+      @keyframes cbump { 0% { transform: scale(1); } 40% { transform: scale(1.38); } 100% { transform: scale(1); } }
+      .cbar { height: 3px; background: rgba(160, 200, 245, .18); border-radius: 2px; margin-top: 3px; overflow: hidden; }
+      .cbar i { display: block; height: 100%; width: 0%; background: #ffd23e; border-radius: 2px; }
       .stat { padding: 6px 14px 7px; text-align: center; min-width: 86px; }
       .stat + .stat { border-left: 1px solid rgba(160, 200, 245, .18); }
       .stat .lab { font-size: 10px; letter-spacing: .18em; color: #9fc2e8; }
@@ -49,7 +67,7 @@
       #muteBtn.on { display: flex; }
       /* 雪质提示：进入粉雪/冰面分区时在 HUD 下方亮起 */
       #zoneTag {
-        position: fixed; left: 50%; top: calc(64px + env(safe-area-inset-top)); transform: translateX(-50%);
+        position: fixed; left: 50%; top: calc(106px + env(safe-area-inset-top)); transform: translateX(-50%);
         z-index: 5; display: none; padding: 5px 16px 6px; border-radius: 999px;
         font-size: 12.5px; font-weight: 700; letter-spacing: .12em; pointer-events: none; white-space: nowrap;
       }
@@ -120,6 +138,17 @@
         opacity: 0; pointer-events: none; font-variant-numeric: tabular-nums;
       }
       #popup.pop { animation: popfly 1s ease-out forwards; }
+      /* 穿门浮字光晕：金色光环从浮字处扩散开 */
+      #popup.halo::after {
+        content: ''; position: absolute; left: 50%; top: 50%; width: 74px; height: 74px;
+        margin: -37px 0 0 -37px; border-radius: 50%; pointer-events: none;
+        border: 3px solid rgba(255, 210, 62, .9); box-shadow: 0 0 22px rgba(255, 170, 40, .55) inset;
+        animation: haloping .55s ease-out forwards;
+      }
+      @keyframes haloping {
+        0% { transform: scale(.35); opacity: .95; }
+        100% { transform: scale(2.7); opacity: 0; }
+      }
       @keyframes popfly {
         0% { opacity: 0; transform: translate(-50%, -30%) scale(.7); }
         18% { opacity: 1; transform: translate(-50%, -60%) scale(1.12); }
@@ -136,6 +165,14 @@
         .stat { min-width: 74px; padding: 5px 9px 6px; }
         .stat .val { font-size: 18px; }
         .sbtn { width: 70px; height: 70px; }
+        /* 竖屏收紧 HUD：表盘变小、格距压缩、静音键下移避开 HUD 条，整体不挡主角和前方雪道 */
+        #gauge { width: 56px; height: 56px; }
+        .gNum { font-size: 13px; }
+        .gaugeCell { padding: 3px 4px 3px 7px; }
+        .stat { min-width: 57px; padding: 5px 7px 6px; }
+        #comboStat { min-width: 62px; }
+        #zoneTag { top: calc(90px + env(safe-area-inset-top)); }
+        #muteBtn { top: calc(100px + env(safe-area-inset-top)); }
       }
     </style>
   </head>
@@ -145,9 +182,25 @@
 
     <div id="hud">
       <div class="hudbar">
-        <div class="stat"><div class="lab">距离 DIST</div><div class="val"><span id="hDist">0</span><small> m</small></div></div>
-        <div class="stat"><div class="lab">速度 SPEED</div><div class="val"><span id="hSpeed">0</span><small> km/h</small></div></div>
+        <div class="gaugeCell">
+          <div id="gauge" aria-label="速度表">
+            <svg viewBox="0 0 100 100" aria-hidden="true">
+              <path d="M 15.36 70 A 40 40 0 1 1 84.64 70" fill="none" stroke="rgba(160,200,245,.25)" stroke-width="5" stroke-linecap="round" />
+              <path id="gArc" d="M 15.36 70 A 40 40 0 1 1 84.64 70" fill="none" stroke="#7ec3ff" stroke-width="5" stroke-linecap="round" stroke-dasharray="0 200" />
+              <g stroke="rgba(220,238,255,.75)" stroke-width="2" stroke-linecap="round">
+                <line x1="20.6" y1="67" x2="16.2" y2="69.5" /><line x1="20.6" y1="33" x2="16.2" y2="30.5" />
+                <line x1="50" y1="16" x2="50" y2="11" />
+                <line x1="79.4" y1="33" x2="83.8" y2="30.5" /><line x1="79.4" y1="67" x2="83.8" y2="69.5" />
+              </g>
+              <line id="gNeedle" x1="50" y1="57" x2="50" y2="23" stroke="#7ec3ff" stroke-width="3.2" stroke-linecap="round" transform="rotate(-120 50 50)" />
+              <circle cx="50" cy="50" r="4.2" fill="#dfeaf8" />
+            </svg>
+            <div class="gNum"><span id="gSpeed">0</span><small>km/h</small></div>
+          </div>
+        </div>
+        <div class="stat"><div class="lab">距离 DIST</div><div class="val"><span id="hDist">0</span><small id="hDistUnit"> m</small></div></div>
         <div class="stat"><div class="lab">分数 SCORE</div><div class="val"><span id="hScore">0</span></div></div>
+        <div class="stat" id="comboStat"><div class="lab">连击 COMBO</div><div class="val" id="hCombo">×1</div><div class="cbar"><i id="comboBar"></i></div></div>
         <div class="stat"><div class="lab">时段 PHASE</div><div class="val" id="hPhase" style="font-size:15px">☀️ 白天</div></div>
       </div>
     </div>
@@ -169,8 +222,9 @@
         <p class="tagline">踩着单板从雪山之巅一路舞下山，白天、黄昏、极光夜与黎明在滑行中流转。<br />压刃卷起雪雾——穿旗门、躲松树岩石，别摔！</p>
         <div class="howto">
           <div><span class="dot">▸</span> <b>转向</b>：按住屏幕左右按钮 / ← → 方向键 / 左右拖动</div>
-          <div><span class="dot">▸</span> <b>穿旗门</b>：从红蓝旗门中间穿过，<b>+50 分</b></div>
-          <div><span class="dot">▸</span> <b>擦身而过</b>：贴着树或石头掠过，<b>+10 分</b></div>
+          <div><span class="dot">▸</span> <b>穿旗门</b>：从红蓝旗门中间穿过，<b>+50 分</b>，门处闪光</div>
+          <div><span class="dot">▸</span> <b>连击</b>：穿门 / 擦身不断档，倍率 <b>×2、×3…</b> 得分翻倍；撞上或断档太久清零，看左上连击条</div>
+          <div><span class="dot">▸</span> <b>擦身而过</b>：贴着树或石头掠过，<b>+10 分</b>，那一瞬画面会慢下来</div>
           <div><span class="dot">▸</span> <b>刻滑</b>：压刃转弯卷起雪雾拖尾，慢一点但更稳</div>
           <div><span class="dot">▸</span> <b>宽谷雪道</b>：谷底 60 米宽，滑到边缘深雪会被轻轻推回，视线永远开阔</div>
           <div><span class="dot">▸</span> <b>看雪面</b>：中央是压雪纹；更白的<b>粉雪</b>会拖慢你，偏蓝发亮的<b>冰面</b>更滑、转向迟半拍</div>
@@ -1457,6 +1511,10 @@
       var px = 0, pz = 0, speed = 0, latVel = 0, steerVis = 0;
       var distance = 0, score = 0, gateBonus = 0, gatesPassed = 0, elapsed = 0;
       var bestScore = 0, shake = 0, crashTimer = -1, prevZ = 0;
+      /* 连击与慢动作（BACKLOG 6 HUD 反馈）：精彩动作不断档累积倍率，断档超时或撞毁清零；
+         擦身触发 0.42 秒慢动作，timeScale 平滑进出，转向输入始终按真实时间响应 */
+      var combo = 0, comboTimer = 0, COMBO_WINDOW = 6.5;
+      var timeScale = 1, slowmoT = 0, slowmoCd = 0, frameRawDt = 0;
       var fovKick = 0; // 过旗门瞬间的小幅 FOV 冲量，衰减回速度基线
       /* 人物姿态/纵向物理状态：全部平滑量，逐帧 damp 趋近目标，绝不跳变 */
       var riderY = 0, riderVy = 0, prevGroundY = 0, airTime = 0, airGap = 0;
@@ -1471,7 +1529,10 @@
       var hudEl = document.getElementById('hud');
       var steerEl = document.getElementById('steer');
       var muteBtn = document.getElementById('muteBtn');
-      var hDist = document.getElementById('hDist'), hSpeed = document.getElementById('hSpeed'), hScore = document.getElementById('hScore'), hPhase = document.getElementById('hPhase');
+      var hDist = document.getElementById('hDist'), hDistUnit = document.getElementById('hDistUnit'), hScore = document.getElementById('hScore'), hPhase = document.getElementById('hPhase');
+      var gaugeEl = document.getElementById('gauge'), gSpeed = document.getElementById('gSpeed'),
+        gArc = document.getElementById('gArc'), gNeedle = document.getElementById('gNeedle'), gaugeHot = false;
+      var comboStat = document.getElementById('comboStat'), hCombo = document.getElementById('hCombo'), comboBar = document.getElementById('comboBar');
       var popup = document.getElementById('popup');
       /* 地形提示牌 #zoneTag：只在地形切换时改 DOM（每帧调用、状态没变就直接返回）。
          优先级：跳台 > 窄道 > 粉雪 > 冰面（四种地形互不重叠，优先级只是保险）；
@@ -1502,9 +1563,99 @@
           zoneTagEl.className = '';
         }
       }
-      function showPopup(txt) {
+      function showPopup(txt, kind) {
         popup.textContent = txt;
-        popup.classList.remove('pop'); void popup.offsetWidth; popup.classList.add('pop');
+        popup.className = ''; void popup.offsetWidth;
+        popup.classList.add('pop');
+        if (kind === 'gate') popup.classList.add('halo'); // 穿门浮字带金色光晕扩散
+      }
+
+      /* ---------- HUD 反馈：距离格式 / 速度表 / 连击 ---------- */
+      function fmtDist(d) { // 不满 1 公里报米，过了报公里（两位小数），和分数并排不拥挤
+        return d < 1000 ? { v: String(Math.floor(d)), u: 'm' } : { v: (d / 1000).toFixed(2), u: 'km' };
+      }
+      function updateGauge(kmh) { // 表盘满量程 120 km/h：指针 -120°→+120°，弧色冷蓝→暖橙红
+        var r = clamp(kmh / 120, 0, 1);
+        var hue = Math.round(205 - 190 * r);
+        var col = 'hsl(' + hue + ',92%,58%)';
+        gNeedle.setAttribute('transform', 'rotate(' + (-120 + 240 * r).toFixed(1) + ' 50 50)');
+        gNeedle.style.stroke = col;
+        gArc.style.strokeDasharray = (r * 167.6).toFixed(1) + ' 200';
+        gArc.style.stroke = col;
+        gSpeed.textContent = Math.round(kmh);
+        var hot = kmh >= 82; // 高速：表盘微光 + 数字加粗（.hot 样式）
+        if (hot !== gaugeHot) { gaugeHot = hot; gaugeEl.classList.toggle('hot', hot); }
+        gSpeed.style.color = hot ? col : '';
+      }
+      function updateComboHUD(bumpIt) { // 连击越高越亮：金 → 橙 → 红，带辉光与底色
+        hCombo.textContent = '×' + Math.max(1, combo);
+        if (combo <= 1) {
+          hCombo.style.color = '#8fb0d6'; hCombo.style.textShadow = 'none';
+          comboStat.style.background = '';
+        } else {
+          var heat = clamp((combo - 2) / 6, 0, 1);
+          var hue = Math.round(46 - heat * 34);
+          hCombo.style.color = 'hsl(' + hue + ',100%,' + Math.round(62 - heat * 6) + '%)';
+          hCombo.style.textShadow = '0 0 ' + (8 + heat * 12) + 'px hsla(' + hue + ',100%,55%,.9)';
+          comboStat.style.background = 'rgba(255,' + Math.round(150 - heat * 60) + ',30,' + (0.10 + heat * 0.22).toFixed(2) + ')';
+        }
+        comboBar.style.width = combo > 0 ? '100%' : '0%';
+        if (bumpIt && combo >= 2) { comboStat.classList.remove('bump'); void comboStat.offsetWidth; comboStat.classList.add('bump'); }
+      }
+      /* 一次精彩动作（穿门/擦身）：连击 +1、刷新窗口、按当前倍率计分，返回实际得分 */
+      function registerFeat(base) {
+        combo++; comboTimer = COMBO_WINDOW;
+        var pts = base * combo;
+        gateBonus += pts;
+        updateComboHUD(true);
+        return { pts: pts, mult: combo };
+      }
+      /* 擦身慢动作一瞬：约 0.42 秒真实时间，冷却 1.3 秒防连续擦身叠成长慢镜；减动效偏好时不触发 */
+      function triggerSlowmo() {
+        if (reducedMotion || slowmoCd > 0) return;
+        slowmoT = 0.42; slowmoCd = 1.3;
+      }
+
+      /* ---------- 穿门闪光：旗门处金色辉光 + 扩散光环（精灵池，免 GC） ---------- */
+      var ringTex = (function () {
+        var c = document.createElement('canvas'); c.width = c.height = 256;
+        var g = c.getContext('2d');
+        g.strokeStyle = 'rgba(255,255,255,1)'; g.lineWidth = 13;
+        g.shadowColor = 'rgba(255,255,255,.9)'; g.shadowBlur = 16;
+        g.beginPath(); g.arc(128, 128, 102, 0, 7); g.stroke();
+        g.beginPath(); g.arc(128, 128, 102, 0, 7); g.stroke();
+        return new THREE.CanvasTexture(c);
+      })();
+      var flashes = [];
+      for (var fli = 0; fli < 5; fli++) {
+        var fgrp = new THREE.Group();
+        var fglow = new THREE.Sprite(new THREE.SpriteMaterial({
+          map: glowTexture('rgba(255,240,200,1)', 'rgba(255,170,60,.55)'),
+          transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, color: 0xffd76a
+        }));
+        var fring = new THREE.Sprite(new THREE.SpriteMaterial({
+          map: ringTex, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, color: 0xffe9a3
+        }));
+        fgrp.add(fglow); fgrp.add(fring); fgrp.visible = false; scene.add(fgrp);
+        flashes.push({ grp: fgrp, glow: fglow, ring: fring, t: -1 });
+      }
+      function spawnGateFlash(x, y, z) {
+        var best = flashes[0];
+        for (var i = 0; i < flashes.length; i++) { if (flashes[i].t < 0) { best = flashes[i]; break; } if (flashes[i].t > best.t) best = flashes[i]; }
+        best.grp.position.set(x, y, z);
+        best.t = 0; best.grp.visible = true;
+      }
+      function updateFlashes(rdt) { // 按真实时间播放，慢动作里也不拖沓
+        for (var i = 0; i < flashes.length; i++) {
+          var f = flashes[i];
+          if (f.t < 0) continue;
+          f.t += rdt;
+          var u = f.t / 0.55;
+          if (u >= 1) { f.t = -1; f.grp.visible = false; continue; }
+          var gs = 3 + u * 7, rs = 2.5 + u * 11;
+          f.glow.scale.set(gs, gs, 1); f.glow.material.opacity = 0.95 * (1 - u);
+          f.ring.scale.set(rs, rs, 1); f.ring.material.opacity = 0.85 * (1 - u) * (1 - u);
+        }
       }
 
       function resetWorld() {
@@ -1514,6 +1665,8 @@
         riderY = groundH(0, 0); prevGroundY = riderY; riderVy = 0; airGap = 0; airTime = 0;
         landDip = 0; crouchPulse = 0; prevSteerSign = 0; poseLean = 0; poseCrouch = 0.4;
         riderZone = { p: 0, i: 0 }; lastZoneKey = ''; zoneTagEl.className = '';
+        combo = 0; comboTimer = 0; timeScale = 1; slowmoT = 0; slowmoCd = 0; updateComboHUD(false);
+        for (var fi = 0; fi < flashes.length; fi++) { flashes[fi].t = -1; flashes[fi].grp.visible = false; }
         rampHere = 0; prevRampH = 0; narrowHere = 0; airFromJump = false;
         rider.rotation.set(0, 0, 0);
         for (var i = 0; i < chunks.length; i++) {
@@ -1547,6 +1700,7 @@
       }
       function endGame(why) {
         state = 'over';
+        combo = 0; comboTimer = 0; slowmoT = 0; updateComboHUD(false); // 撞毁：连击清零、慢动作立即退出
         crashSound();
         shake = reducedMotion ? 0 : 0.85;
         crashTimer = 0.75;
@@ -1744,7 +1898,16 @@
           lastFrameMs = nowMs;
         }
         try {
-          var dt = Math.min(clock.getDelta(), 0.05);
+          /* 慢动作时间轴：擦身触发后 timeScale 平滑压到 0.35、约 0.42 秒后平滑恢复；
+             转向平滑用真实时间（rawDt），慢动作期间操作手感不打折 */
+          var rawDt = Math.min(clock.getDelta(), 0.05);
+          frameRawDt = rawDt;
+          if (slowmoT > 0) slowmoT -= rawDt;
+          if (slowmoCd > 0) slowmoCd -= rawDt;
+          var tsTarget = slowmoT > 0 ? 0.35 : 1;
+          timeScale = lerp(timeScale, tsTarget, 1 - Math.pow(0.00001, rawDt));
+          if (Math.abs(timeScale - tsTarget) < 0.01) timeScale = tsTarget;
+          var dt = rawDt * timeScale;
           var tNow = clock.elapsedTime;
 
           /* --- 输入合成 --- */
@@ -1752,10 +1915,15 @@
           if (keys.l || btnHeld.l) steerIn -= 1;
           if (keys.r || btnHeld.r) steerIn += 1;
           if (dragging && Math.abs(dragSteer) > Math.abs(steerIn)) steerIn = dragSteer;
-          steerVis = lerp(steerVis, steerIn, 1 - Math.pow(0.0001, dt));
+          steerVis = lerp(steerVis, steerIn, 1 - Math.pow(0.0001, rawDt));
 
           if (state === 'play') {
             elapsed += dt;
+            /* 连击窗口倒计时：断档超过 COMBO_WINDOW 秒没精彩动作，连击清零 */
+            if (combo > 0) {
+              comboTimer -= dt;
+              if (comboTimer <= 0) { combo = 0; comboTimer = 0; updateComboHUD(false); }
+            }
             /* 雪质手感：粉雪拖住板（轻微减速）；冰面更滑（轻微加速）且转向迟钝半拍 */
             riderZone = zoneFactors(pz);
             narrowHere = narrowFactorD(-pz);
@@ -1803,9 +1971,10 @@
               if (g && !g.done && prevZ > g.z && pz <= g.z) {
                 g.done = true;
                 if (Math.abs(px - g.x) <= 3.4) {
-                  gateBonus += 50; gatesPassed++;
+                  var gf = registerFeat(50); gatesPassed++;
                   fovKick = 3.2;
-                  showPopup('+50 旗门！');
+                  spawnGateFlash(g.x, groundH(g.x, g.z) + 1.7, g.z); // 旗门处闪光 + 光环扩散
+                  showPopup('+' + gf.pts + ' 旗门！' + (gf.mult > 1 ? ' ×' + gf.mult : ''), 'gate');
                   blip(880, 1320, 0.16, 'triangle', 0.2);
                   setTimeout(function () { blip(1320, 1760, 0.14, 'triangle', 0.14); }, 70);
                 }
@@ -1824,8 +1993,10 @@
                 var rr = c.r + 0.42;
                 if (d2 < rr * rr) { crashed = c; break; }
                 if (!c.near && Math.abs(dz) < 0.9 && d2 < Math.pow(rr + 1.15, 2)) {
-                  c.near = true; gateBonus += 10;
-                  showPopup('+10 擦身！');
+                  c.near = true;
+                  var nf = registerFeat(10);
+                  showPopup('+' + nf.pts + ' 擦身！' + (nf.mult > 1 ? ' ×' + nf.mult : ''), 'near');
+                  triggerSlowmo(); // 擦身一瞬慢动作
                   blip(520, 760, 0.1, 'triangle', 0.1);
                 }
               }
@@ -1841,8 +2012,10 @@
                 var err2 = ec.r + 0.42;
                 if (ed2 < err2 * err2) { crashed = ec; break; }
                 if (!ec.near && Math.abs(edz) < 0.9 && ed2 < Math.pow(err2 + 1.15, 2)) {
-                  ec.near = true; gateBonus += 10;
-                  showPopup('+10 擦身！');
+                  ec.near = true;
+                  var nf2 = registerFeat(10);
+                  showPopup('+' + nf2.pts + ' 擦身！' + (nf2.mult > 1 ? ' ×' + nf2.mult : ''), 'near');
+                  triggerSlowmo(); // 擦身一瞬慢动作
                   blip(520, 760, 0.1, 'triangle', 0.1);
                 }
               }
@@ -1896,9 +2069,11 @@
             hudTick += dt;
             if (hudTick > 0.08) {
               hudTick = 0;
-              hDist.textContent = Math.floor(distance);
-              hSpeed.textContent = Math.round(speed * 3.6);
+              var fd = fmtDist(distance);
+              hDist.textContent = fd.v; hDistUnit.textContent = ' ' + fd.u;
               hScore.textContent = Math.floor(score);
+              updateGauge(speed * 3.6);
+              comboBar.style.width = combo > 0 ? Math.round(comboTimer / COMBO_WINDOW * 100) + '%' : '0%';
             }
           }
 
@@ -2164,6 +2339,9 @@
           sprayGeo.attributes.position.needsUpdate = true;
           updatePuffs(puffPos, puffDat, PUFF_N, dt, 0.55);
           puffGeo.attributes.position.needsUpdate = true;
+
+          /* --- 穿门闪光更新（真实时间，0.55 秒辉光 + 光环扩散） --- */
+          updateFlashes(frameRawDt);
 
           renderer.render(scene, camera);
         } catch (ex) {
