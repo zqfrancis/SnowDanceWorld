@@ -234,7 +234,7 @@
           <div><span class="dot">▸</span> 速度越快视野越开、风声越尖，活得越久分越高</div>
         </div>
         <button class="bigbtn" id="startBtn">开始滑行</button>
-        <p class="fineprint">点任意处或按空格也能开始 · 建议开声音，有风声</p>
+        <p class="fineprint">点任意处或按空格也能开始 · 建议开声音，有风声 · M 键或右上角喇叭可静音</p>
       </div>
     </div>
 
@@ -1473,32 +1473,72 @@
         }
       }
 
-      /* ================= 音效（Web Audio 合成） ================= */
-      var AC = null, windGain = null, windFilter = null, muted = false;
+      /* ================= 音效（Web Audio 合成 · 第 7 项升级） =================
+         全部合成、无音频文件。结构：
+         - masterGain 总线：静音只动这一路（M 键 / 喇叭按钮，状态存 localStorage）
+         - 风声三层：底层粉红噪声+低通（持续）／中层带通呼啸（中高速）／高层正弦尖啸（极速）
+         - 刻滑嘶声：独立带通噪声，只在压刃转弯时响；换刃瞬间另给短促嘶声
+         - 冰面刮冰：独立高频带通噪声，只在冰面分区浮现
+         - 事件音：过门铃声（连击升调）／擦身轻提示／落地闷响（按腾空时长）／撞击闷响+低音轰鸣 */
+      var MUTE_KEY = 'snow-dance-muted';
+      var muted = false;
+      try { muted = window.localStorage.getItem(MUTE_KEY) === '1'; } catch (e) { muted = false; }
+      var AC = null, masterGain = null;
+      var windGain = null, windFilter = null;
       var windBP = null, windBPGain = null, whistleOsc = null, whistleGain = null;
+      var carveFilter = null, carveGain = null, iceFilter = null, iceGain = null;
+      var noiseBufWhite = null, noiseBufPink = null;
+      function makeNoiseBuffers() {
+        var len = AC.sampleRate * 2;
+        noiseBufWhite = AC.createBuffer(1, len, AC.sampleRate);
+        var wd = noiseBufWhite.getChannelData(0);
+        for (var i = 0; i < len; i++) wd[i] = Math.random() * 2 - 1;
+        /* 粉红噪声（Paul Kellet 近似）：低频能量更足，听感是沉的风，不是电视雪花声 */
+        noiseBufPink = AC.createBuffer(1, len, AC.sampleRate);
+        var pd = noiseBufPink.getChannelData(0);
+        var b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+        for (var j = 0; j < len; j++) {
+          var w = Math.random() * 2 - 1;
+          b0 = 0.99886 * b0 + w * 0.0555179; b1 = 0.99332 * b1 + w * 0.0750759;
+          b2 = 0.96900 * b2 + w * 0.1538520; b3 = 0.86650 * b3 + w * 0.3104856;
+          b4 = 0.55000 * b4 + w * 0.5329522; b5 = -0.7616 * b5 - w * 0.0168980;
+          pd[j] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + w * 0.5362) * 0.11;
+          b6 = w * 0.115926;
+        }
+      }
       function initAudio() {
         if (AC) { if (AC.state === 'suspended') AC.resume(); return; }
         try {
           AC = new (window.AudioContext || window.webkitAudioContext)();
-          var len = AC.sampleRate * 2;
-          var buf = AC.createBuffer(1, len, AC.sampleRate);
-          var d = buf.getChannelData(0);
-          for (var i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
-          var src = AC.createBufferSource(); src.buffer = buf; src.loop = true;
-          windFilter = AC.createBiquadFilter(); windFilter.type = 'lowpass'; windFilter.frequency.value = 420; windFilter.Q.value = 0.6;
+          masterGain = AC.createGain(); masterGain.gain.value = muted ? 0 : 1;
+          masterGain.connect(AC.destination);
+          makeNoiseBuffers();
+          /* 底层风：粉红噪声 → 低通 */
+          var srcPink = AC.createBufferSource(); srcPink.buffer = noiseBufPink; srcPink.loop = true;
+          windFilter = AC.createBiquadFilter(); windFilter.type = 'lowpass'; windFilter.frequency.value = 380; windFilter.Q.value = 0.5;
           windGain = AC.createGain(); windGain.gain.value = 0;
-          src.connect(windFilter); windFilter.connect(windGain); windGain.connect(AC.destination);
-          /* 带通层：速度越高中心频率越往上爬，风声从呼呼变呼啸 */
-          windBP = AC.createBiquadFilter(); windBP.type = 'bandpass'; windBP.frequency.value = 600; windBP.Q.value = 1.1;
+          srcPink.connect(windFilter); windFilter.connect(windGain); windGain.connect(masterGain);
+          /* 白噪声母带：分发给中层呼啸 / 刻滑 / 冰面三路带通 */
+          var src = AC.createBufferSource(); src.buffer = noiseBufWhite; src.loop = true;
+          windBP = AC.createBiquadFilter(); windBP.type = 'bandpass'; windBP.frequency.value = 620; windBP.Q.value = 1.15;
           windBPGain = AC.createGain(); windBPGain.gain.value = 0;
-          src.connect(windBP); windBP.connect(windBPGain); windBPGain.connect(AC.destination);
-          /* 哨音层：极高速时才浮现的细哨，音调随速度升高 */
-          whistleOsc = AC.createOscillator(); whistleOsc.type = 'sine'; whistleOsc.frequency.value = 500;
+          src.connect(windBP); windBP.connect(windBPGain); windBPGain.connect(masterGain);
+          /* 刻滑：带通中心约 1.4–2.6kHz、Q 偏低带一点体量，像板刃切雪的嘶鸣而非纯白噪声 */
+          carveFilter = AC.createBiquadFilter(); carveFilter.type = 'bandpass'; carveFilter.frequency.value = 1650; carveFilter.Q.value = 0.75;
+          carveGain = AC.createGain(); carveGain.gain.value = 0;
+          src.connect(carveFilter); carveFilter.connect(carveGain); carveGain.connect(masterGain);
+          /* 刮冰：高频带通，只留细碎高频嘶声 */
+          iceFilter = AC.createBiquadFilter(); iceFilter.type = 'bandpass'; iceFilter.frequency.value = 5200; iceFilter.Q.value = 1.6;
+          iceGain = AC.createGain(); iceGain.gain.value = 0;
+          src.connect(iceFilter); iceFilter.connect(iceGain); iceGain.connect(masterGain);
+          /* 高层尖啸：正弦哨音，极速才浮现 */
+          whistleOsc = AC.createOscillator(); whistleOsc.type = 'sine'; whistleOsc.frequency.value = 820;
           whistleGain = AC.createGain(); whistleGain.gain.value = 0;
-          whistleOsc.connect(whistleGain); whistleGain.connect(AC.destination);
-          src.start(); whistleOsc.start();
+          whistleOsc.connect(whistleGain); whistleGain.connect(masterGain);
+          srcPink.start(); src.start(); whistleOsc.start();
         } catch (e) { AC = null; }
       }
+      function outNode() { return masterGain || (AC && AC.destination); }
       function blip(f0, f1, dur, type, vol) {
         if (!AC || muted) return;
         var o = AC.createOscillator(), g = AC.createGain();
@@ -1507,18 +1547,139 @@
         o.frequency.exponentialRampToValueAtTime(Math.max(f1, 1), AC.currentTime + dur);
         g.gain.setValueAtTime(vol || 0.16, AC.currentTime);
         g.gain.exponentialRampToValueAtTime(0.001, AC.currentTime + dur);
-        o.connect(g); g.connect(AC.destination);
+        o.connect(g); g.connect(outNode());
         o.start(); o.stop(AC.currentTime + dur + 0.02);
       }
+      /* 过门铃声：基频正弦 + 2/3/4.24 倍泛音，衰减由快到慢叠出金属铃感；
+         连击越高音调逐级升高（每级 +1 半音，封顶 +10），音量克制不盖风声 */
+      function bellSound(comboLv) {
+        if (!AC || muted) return;
+        var step = clamp((comboLv || 1) - 1, 0, 10);
+        var base = 1174.66 * Math.pow(2, step / 12); // D6 起步
+        var t = AC.currentTime;
+        var parts = [ [1, 0.16, 0.62], [2.0, 0.07, 0.38], [3.01, 0.045, 0.24], [4.24, 0.025, 0.14] ];
+        for (var i = 0; i < parts.length; i++) {
+          var o = AC.createOscillator(), g = AC.createGain();
+          o.type = 'sine'; o.frequency.value = base * parts[i][0];
+          g.gain.setValueAtTime(parts[i][1], t);
+          g.gain.exponentialRampToValueAtTime(0.0008, t + parts[i][2]);
+          o.connect(g); g.connect(outNode());
+          o.start(t); o.stop(t + parts[i][2] + 0.03);
+        }
+      }
+      /* 擦身提示：轻而短的一声，不抢注意力 */
+      function nearSound() {
+        if (!AC || muted) return;
+        blip(1568, 2093, 0.09, 'sine', 0.065);
+      }
+      /* 换刃短嘶：0.13 秒带通噪声扫频，力度随转向幅度 */
+      function carveEdgeSound(strength) {
+        if (!AC || muted || !noiseBufWhite) return;
+        var t = AC.currentTime;
+        var s = AC.createBufferSource(); s.buffer = noiseBufWhite;
+        s.playbackRate.value = 0.9 + Math.random() * 0.2;
+        var f = AC.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 0.9;
+        f.frequency.setValueAtTime(1500, t);
+        f.frequency.exponentialRampToValueAtTime(2500, t + 0.11);
+        var g = AC.createGain();
+        var v = 0.05 + clamp(strength, 0, 1) * 0.1;
+        g.gain.setValueAtTime(0.0008, t);
+        g.gain.exponentialRampToValueAtTime(v, t + 0.025);
+        g.gain.exponentialRampToValueAtTime(0.0008, t + 0.13);
+        s.connect(f); f.connect(g); g.connect(outNode());
+        s.start(t); s.stop(t + 0.16);
+      }
+      /* 落地闷响：腾空越久越重——低频正弦下坠 + 一小团低通噪声，音量/时长随 airTime 缩放 */
+      function landSound(airT, impact) {
+        if (!AC || muted) return;
+        var w = clamp(airT / 1.1, 0.15, 1); // 权重：短颠簸轻、长腾空重
+        var t = AC.currentTime;
+        var o = AC.createOscillator(), g = AC.createGain();
+        o.type = 'sine';
+        o.frequency.setValueAtTime(130 + w * 40, t);
+        o.frequency.exponentialRampToValueAtTime(42, t + 0.16 + w * 0.1);
+        g.gain.setValueAtTime(0.1 + w * 0.22, t);
+        g.gain.exponentialRampToValueAtTime(0.0008, t + 0.2 + w * 0.14);
+        o.connect(g); g.connect(outNode()); o.start(t); o.stop(t + 0.4);
+        if (noiseBufWhite) {
+          var s = AC.createBufferSource(); s.buffer = noiseBufWhite;
+          var f = AC.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 480;
+          var ng = AC.createGain();
+          ng.gain.setValueAtTime(0.06 + w * 0.12, t);
+          ng.gain.exponentialRampToValueAtTime(0.0008, t + 0.14 + w * 0.08);
+          s.connect(f); f.connect(ng); ng.connect(outNode());
+          s.start(t); s.stop(t + 0.3);
+        }
+      }
+      /* 撞击闷响：低频重击 + 短暂低音轰鸣，音量适中不刺耳；风声的收住在 endGame 里做 */
       function crashSound() {
         if (!AC || muted) return;
-        blip(160, 38, 0.35, 'sine', 0.5);
-        var len = AC.sampleRate * 0.3, buf = AC.createBuffer(1, len, AC.sampleRate), d = buf.getChannelData(0);
+        var t = AC.currentTime;
+        var o = AC.createOscillator(), g = AC.createGain();
+        o.type = 'sine';
+        o.frequency.setValueAtTime(150, t);
+        o.frequency.exponentialRampToValueAtTime(34, t + 0.42);
+        g.gain.setValueAtTime(0.42, t);
+        g.gain.exponentialRampToValueAtTime(0.0008, t + 0.48);
+        o.connect(g); g.connect(outNode()); o.start(t); o.stop(t + 0.52);
+        /* 低音轰鸣：55Hz 附近缓起缓落约 0.6 秒 */
+        var o2 = AC.createOscillator(), g2 = AC.createGain();
+        o2.type = 'sine'; o2.frequency.value = 55;
+        g2.gain.setValueAtTime(0.0008, t);
+        g2.gain.exponentialRampToValueAtTime(0.16, t + 0.06);
+        g2.gain.exponentialRampToValueAtTime(0.0008, t + 0.62);
+        o2.connect(g2); g2.connect(outNode()); o2.start(t); o2.stop(t + 0.66);
+        /* 撞击噪声团：低通压到 500Hz，只剩闷的碎雪/木头感，没有高频刺响 */
+        var len = Math.floor(AC.sampleRate * 0.28), buf = AC.createBuffer(1, len, AC.sampleRate), d = buf.getChannelData(0);
         for (var i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
         var s = AC.createBufferSource(); s.buffer = buf;
-        var f = AC.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 900;
-        var g = AC.createGain(); g.gain.value = 0.55;
-        s.connect(f); f.connect(g); g.connect(AC.destination); s.start();
+        var f = AC.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 520;
+        var ng = AC.createGain(); ng.gain.value = 0.34;
+        s.connect(f); f.connect(ng); ng.connect(outNode()); s.start(t);
+      }
+      /* 每帧风声/刻滑/刮冰更新：三层风随速度平滑叠加，雪质改音色 */
+      function updateAudioLayers(speedNow, carveAmt, airGapNow) {
+        if (!AC || !windGain) return;
+        var t = AC.currentTime;
+        var sf = clamp(speedNow / 31, 0, 1);
+        var p = riderZone.p, ic = riderZone.i;
+        var onSnow = airGapNow <= 0.05 ? 1 : 0.25; // 腾空时板离雪：刻滑/刮冰收掉，风声保留
+        /* 底层：持续风，音量与截止随速度；粉雪变闷（截止再压低、音量略降） */
+        windGain.gain.setTargetAtTime((0.022 + Math.pow(sf, 1.5) * 0.155) * (1 - p * 0.22), t, 0.15);
+        windFilter.frequency.setTargetAtTime((250 + speedNow * 34) * (1 - p * 0.42 + ic * 0.08), t, 0.12);
+        /* 中层呼啸：sf 约 0.28 起渐入，带通中心随速度上扫；粉雪里同步变闷 */
+        var midAmt = clamp((sf - 0.28) / 0.38, 0, 1); midAmt = midAmt * midAmt * (3 - 2 * midAmt);
+        if (windBP && windBPGain) {
+          windBP.frequency.setTargetAtTime((480 + speedNow * 46 + carveAmt * 260) * (1 - p * 0.25), t, 0.12);
+          windBPGain.gain.setTargetAtTime(midAmt * 0.085 * (1 - p * 0.2), t, 0.15);
+        }
+        /* 高层尖啸：sf 约 0.74 起才出现，越接近极速越尖越响 */
+        if (whistleOsc && whistleGain) {
+          var hiAmt = clamp((sf - 0.74) / 0.26, 0, 1);
+          whistleOsc.frequency.setTargetAtTime(760 + hiAmt * 620 + carveAmt * 60, t, 0.1);
+          whistleGain.gain.setTargetAtTime(hiAmt * hiAmt * 0.038, t, 0.18);
+        }
+        /* 刻滑嘶声：只在压刃转弯时响，音量随转向力度×速度联动，直滑≈0 */
+        if (carveGain && carveFilter) {
+          var cv = clamp((carveAmt - 0.14) / 0.86, 0, 1);
+          carveFilter.frequency.setTargetAtTime(1250 + cv * 950 + speedNow * 22, t, 0.09);
+          carveGain.gain.setTargetAtTime(Math.pow(cv, 1.35) * (0.025 + sf * 0.13) * onSnow * (1 - ic * 0.35), t, 0.07);
+        }
+        /* 冰面刮冰：轻微高频嘶声，随冰面因子与速度走 */
+        if (iceGain && iceFilter) {
+          iceFilter.frequency.setTargetAtTime(4600 + speedNow * 55, t, 0.12);
+          iceGain.gain.setTargetAtTime(ic * (0.008 + sf * 0.026) * onSnow, t, 0.12);
+        }
+      }
+      /* 撞击/静音时把所有持续层快速收住 */
+      function silenceLayers(tc) {
+        if (!AC) return;
+        var t = AC.currentTime, c = tc || 0.07;
+        if (windGain) windGain.gain.setTargetAtTime(0, t, c);
+        if (windBPGain) windBPGain.gain.setTargetAtTime(0, t, c);
+        if (whistleGain) whistleGain.gain.setTargetAtTime(0, t, c);
+        if (carveGain) carveGain.gain.setTargetAtTime(0, t, c);
+        if (iceGain) iceGain.gain.setTargetAtTime(0, t, c);
       }
 
       /* ================= 游戏状态 ================= */
@@ -1720,11 +1881,7 @@
         shake = reducedMotion ? 0 : 0.85;
         crashTimer = 0.75;
         document.getElementById('overWhy').textContent = why;
-        if (AC) {
-          if (windGain) windGain.gain.setTargetAtTime(0, AC.currentTime, 0.1);
-          if (windBPGain) windBPGain.gain.setTargetAtTime(0, AC.currentTime, 0.1);
-          if (whistleGain) whistleGain.gain.setTargetAtTime(0, AC.currentTime, 0.08);
-        }
+        silenceLayers(0.06); // 撞击后所有风声/刻滑快速收住再停
       }
       function showOver() {
         document.getElementById('zoneTag').className = '';
@@ -1744,16 +1901,19 @@
       document.getElementById('startBtn').addEventListener('click', function (e) { e.stopPropagation(); startGame(); });
       document.getElementById('againBtn').addEventListener('click', function (e) { e.stopPropagation(); startGame(); });
       document.getElementById('startVeil').addEventListener('click', function () { if (state === 'menu') startGame(); });
-      muteBtn.addEventListener('click', function (e) {
-        e.stopPropagation(); muted = !muted;
+      muteBtn.textContent = muted ? '🔇' : '🔊';
+      function setMuted(v) {
+        muted = v;
         muteBtn.textContent = muted ? '🔇' : '🔊';
-        if (muted && AC) {
-          if (windGain) windGain.gain.setTargetAtTime(0, AC.currentTime, 0.05);
-          if (windBPGain) windBPGain.gain.setTargetAtTime(0, AC.currentTime, 0.05);
-          if (whistleGain) whistleGain.gain.setTargetAtTime(0, AC.currentTime, 0.05);
-        }
+        try { window.localStorage.setItem(MUTE_KEY, muted ? '1' : '0'); } catch (e) { /* 隐私模式存不下就算了 */ }
+        if (AC && masterGain) masterGain.gain.setTargetAtTime(muted ? 0 : 1, AC.currentTime, 0.04);
+        if (muted) silenceLayers(0.05);
+      }
+      muteBtn.addEventListener('click', function (e) {
+        e.stopPropagation(); initAudio(); setMuted(!muted);
       });
       window.addEventListener('keydown', function (e) {
+        if (e.code === 'KeyM') { initAudio(); setMuted(!muted); return; }
         if (e.code === 'ArrowLeft' || e.code === 'KeyA') { keys.l = true; e.preventDefault(); }
         if (e.code === 'ArrowRight' || e.code === 'KeyD') { keys.r = true; e.preventDefault(); }
         if (e.code === 'Space' || e.code === 'Enter') {
@@ -2002,8 +2162,7 @@
                   fovKick = 3.2;
                   spawnGateFlash(g.x, groundH(g.x, g.z) + 1.7, g.z); // 旗门处闪光 + 光环扩散
                   showPopup('+' + gf.pts + ' 旗门！' + (gf.mult > 1 ? ' ×' + gf.mult : ''), 'gate');
-                  blip(880, 1320, 0.16, 'triangle', 0.2);
-                  setTimeout(function () { blip(1320, 1760, 0.14, 'triangle', 0.14); }, 70);
+                  bellSound(gf.mult);
                 }
               }
             }
@@ -2024,7 +2183,7 @@
                   var nf = registerFeat(10);
                   showPopup('+' + nf.pts + ' 擦身！' + (nf.mult > 1 ? ' ×' + nf.mult : ''), 'near');
                   triggerSlowmo(); // 擦身一瞬慢动作
-                  blip(520, 760, 0.1, 'triangle', 0.1);
+                  nearSound();
                 }
               }
             }
@@ -2043,7 +2202,7 @@
                   var nf2 = registerFeat(10);
                   showPopup('+' + nf2.pts + ' 擦身！' + (nf2.mult > 1 ? ' ×' + nf2.mult : ''), 'near');
                   triggerSlowmo(); // 擦身一瞬慢动作
-                  blip(520, 760, 0.1, 'triangle', 0.1);
+                  nearSound();
                 }
               }
             }
@@ -2056,6 +2215,7 @@
             var sSign = steerVis > 0.22 ? 1 : (steerVis < -0.22 ? -1 : 0);
             if (sSign !== 0) {
               if (prevSteerSign !== 0 && sSign !== prevSteerSign && speed > 10) {
+                carveEdgeSound(carve);
                 crouchPulse = 0.34;
                 var ebN = 6 + Math.round(carve * 10);
                 for (var ebi = 0; ebi < ebN; ebi++) spawnSpray(px, groundH(px, pz), pz, 0.8 + carve * 0.7, sSign > 0 ? -1 : 1);
@@ -2078,21 +2238,8 @@
               puffAcc -= 1;
               spawnPuff(px, gy, pz, 0.5 + carve * 0.9, spraySide);
             }
-            /* 风声随速：音量、低通、带通中心、哨音四层一起随速度爬升 */
-            if (AC && windGain && !muted) {
-              var sf = speed / 31; // 0..1 速度比
-              windGain.gain.setTargetAtTime(0.025 + Math.pow(sf, 1.5) * 0.17, AC.currentTime, 0.15);
-              /* 风声质感随雪面变：粉雪闷（低通压低）、冰面亮（低通抬高，像刮冰的嘶声） */
-              windFilter.frequency.setTargetAtTime((280 + speed * 46 + carve * 320) * (1 - riderZone.p * 0.3 + riderZone.i * 0.18), AC.currentTime, 0.12);
-              if (windBP && windBPGain) {
-                windBP.frequency.setTargetAtTime(420 + speed * 52 + carve * 380, AC.currentTime, 0.12);
-                windBPGain.gain.setTargetAtTime(Math.pow(sf, 2) * 0.11, AC.currentTime, 0.15);
-              }
-              if (whistleOsc && whistleGain) {
-                whistleOsc.frequency.setTargetAtTime(430 + speed * 26 + carve * 90, AC.currentTime, 0.1);
-                whistleGain.gain.setTargetAtTime(Math.max(0, sf - 0.55) * 0.055, AC.currentTime, 0.2);
-              }
-            }
+            /* 风声三层 + 刻滑 + 刮冰：统一在 updateAudioLayers 里按速度/转向/雪质平滑更新 */
+            updateAudioLayers(speed, carve, airGap);
             hudTick += dt;
             if (hudTick > 0.08) {
               hudTick = 0;
@@ -2130,12 +2277,13 @@
               if (riderY <= gy) {
                 riderY = gy;
                 var impact = -riderVy; riderVy = 0; airGap = 0;
+                /* 落地闷响：按腾空时长由轻到重（短颠簸只轻响一声） */
+                if (state === 'play' && airTime >= 0.18) landSound(airTime, impact);
                 /* 腾空计分：滞空越久分越高（跳台抛出的长腾空最赚，小雪包颠一下不计） */
                 if (state === 'play' && airTime >= 0.35) {
                   var airPts = Math.round(airTime * 60);
                   gateBonus += airPts;
                   showPopup('腾空 +' + airPts);
-                  blip(620, 990, 0.15, 'triangle', 0.16);
                 }
                 airTime = 0;
                 landDip = clamp(impact * 0.1, 0.12, 0.8);
