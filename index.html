@@ -128,6 +128,21 @@
       .fineprint { margin: 12px 0 0; font-size: 11.5px; color: #8fb0d6; }
       #overCard h2 { margin: 0; font-size: 34px; font-weight: 800; letter-spacing: .04em; }
       #overCard .why { margin: 6px 0 0; color: #ffc9a3; font-size: 14px; }
+      /* 结算牌从雪面升起：遮罩一显示，牌面自下方升起落位 */
+      #overVeil:not(.hidden) #overCard { animation: cardRise .6s cubic-bezier(.22,.9,.3,1.12); }
+      @keyframes cardRise { 0% { transform: translateY(56px); opacity: 0; } 100% { transform: translateY(0); opacity: 1; } }
+      /* 破纪录：金色闪光大字 */
+      .record {
+        margin: 12px 0 0; font-size: 23px; font-weight: 900; letter-spacing: .22em; color: #ffd23e;
+        text-shadow: 0 0 18px rgba(255, 190, 40, .85), 0 2px 8px rgba(0,0,0,.45);
+        animation: recflash .65s ease-in-out infinite alternate;
+      }
+      .record.hidden { display: none; }
+      @keyframes recflash { from { transform: scale(1); opacity: .8; } to { transform: scale(1.08); opacity: 1; } }
+      @media (prefers-reduced-motion: reduce) {
+        .record { animation: none; }
+        #overVeil:not(.hidden) #overCard { animation: none; }
+      }
       .results { display: flex; justify-content: center; gap: 0; margin: 18px 0 2px; }
       .results .stat { min-width: 96px; }
       .results .stat .val { font-size: 26px; }
@@ -171,6 +186,8 @@
         .gaugeCell { padding: 3px 4px 3px 7px; }
         .stat { min-width: 57px; padding: 5px 7px 6px; }
         #comboStat { min-width: 62px; }
+        #bestStat { min-width: 50px; padding-left: 4px; padding-right: 4px; }
+        #bestStat .val { font-size: 15px; }
         #zoneTag { top: calc(90px + env(safe-area-inset-top)); }
         #muteBtn { top: calc(100px + env(safe-area-inset-top)); }
       }
@@ -200,6 +217,7 @@
         </div>
         <div class="stat"><div class="lab">距离 DIST</div><div class="val"><span id="hDist">0</span><small id="hDistUnit"> m</small></div></div>
         <div class="stat"><div class="lab">分数 SCORE</div><div class="val"><span id="hScore">0</span></div></div>
+        <div class="stat" id="bestStat"><div class="lab">最佳 BEST</div><div class="val"><span id="hBest">0</span></div></div>
         <div class="stat" id="comboStat"><div class="lab">连击 COMBO</div><div class="val" id="hCombo">×1</div><div class="cbar"><i id="comboBar"></i></div></div>
         <div class="stat"><div class="lab">时段 PHASE</div><div class="val" id="hPhase" style="font-size:15px">☀️ 白天</div></div>
       </div>
@@ -233,6 +251,7 @@
           <div><span class="dot">▸</span> <b>昼夜流转</b>：约 2 分半走完一轮——白天、黄昏、繁星极光夜、黎明，看右上角时段牌</div>
           <div><span class="dot">▸</span> 速度越快视野越开、风声越尖，活得越久分越高</div>
         </div>
+        <p class="fineprint" id="startBestLine"></p>
         <button class="bigbtn" id="startBtn">开始滑行</button>
         <p class="fineprint">点任意处或按空格也能开始 · 建议开声音，有风声 · M 键或右上角喇叭可静音</p>
       </div>
@@ -242,14 +261,16 @@
       <div class="card" id="overCard">
         <h2 id="overTitle">摔啦！</h2>
         <p class="why" id="overWhy">撞上了松树</p>
+        <p class="record hidden" id="recordLine">★ 新纪录！</p>
         <div class="results hudbar">
           <div class="stat"><div class="lab">距离</div><div class="val" id="rDist">0</div></div>
           <div class="stat"><div class="lab">分数</div><div class="val" id="rScore">0</div></div>
           <div class="stat"><div class="lab">旗门</div><div class="val" id="rGates">0</div></div>
         </div>
         <p class="fineprint" id="bestLine"></p>
-        <button class="bigbtn" id="againBtn">再来一局</button>
-        <p class="fineprint">按空格快速重开</p>
+        <p class="fineprint" id="todayLine"></p>
+        <button class="bigbtn" id="againBtn">再滑一次</button>
+        <p class="fineprint">按空格或点任意处快速重开</p>
       </div>
     </div>
 
@@ -1687,6 +1708,24 @@
       var px = 0, pz = 0, speed = 0, latVel = 0, steerVis = 0;
       var distance = 0, score = 0, gateBonus = 0, gatesPassed = 0, elapsed = 0;
       var bestScore = 0, shake = 0, crashTimer = -1, prevZ = 0;
+      /* 成绩持久化（BACKLOG 8）：历史最佳 + 今日最佳都存 localStorage；
+         今日最佳按本地日期存一份，跨天打开自动归零。读不到/存不下（隐私模式）就退回内存值，不报错 */
+      var BEST_KEY = 'snow-dance-best', TODAY_KEY = 'snow-dance-today-best';
+      function todayStr() {
+        var d = new Date();
+        function p2(n) { return (n < 10 ? '0' : '') + n; }
+        return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate());
+      }
+      var todayBest = 0;
+      try {
+        bestScore = Math.max(0, parseInt(window.localStorage.getItem(BEST_KEY) || '0', 10) || 0);
+        var tdSaved = JSON.parse(window.localStorage.getItem(TODAY_KEY) || 'null');
+        if (tdSaved && tdSaved.d === todayStr()) todayBest = Math.max(0, tdSaved.s | 0);
+      } catch (e) { /* 存不下就只用内存值 */ }
+      function saveBest() { try { window.localStorage.setItem(BEST_KEY, String(bestScore)); } catch (e) { /* 忽略 */ } }
+      function saveToday() { try { window.localStorage.setItem(TODAY_KEY, JSON.stringify({ d: todayStr(), s: todayBest })); } catch (e) { /* 忽略 */ } }
+      /* 撞树翻滚状态：被弹起的纵速 / 当前高度 / 翻滚角速度，endGame 时点火、over 分支里逐帧推进 */
+      var crashVy = 0, crashY = 0, crashSpin = 0;
       /* 连击与慢动作（BACKLOG 6 HUD 反馈）：精彩动作不断档累积倍率，断档超时或撞毁清零；
          擦身触发 0.42 秒慢动作，timeScale 平滑进出，转向输入始终按真实时间响应 */
       var combo = 0, comboTimer = 0, COMBO_WINDOW = 6.5;
@@ -1710,6 +1749,13 @@
         gArc = document.getElementById('gArc'), gNeedle = document.getElementById('gNeedle'), gaugeHot = false;
       var comboStat = document.getElementById('comboStat'), hCombo = document.getElementById('hCombo'), comboBar = document.getElementById('comboBar');
       var popup = document.getElementById('popup');
+      var hBest = document.getElementById('hBest');
+      /* 打开游戏先把存档成绩亮出来：HUD 最佳格 + 开始牌上的一行小字 */
+      hBest.textContent = bestScore;
+      var startBestLine = document.getElementById('startBestLine');
+      if (bestScore > 0) {
+        startBestLine.textContent = '历史最佳 ' + bestScore + ' 分' + (todayBest > 0 ? ' · 今日最佳 ' + todayBest + ' 分' : '');
+      }
       /* 地形提示牌 #zoneTag：只在地形切换时改 DOM（每帧调用、状态没变就直接返回）。
          优先级：跳台 > 窄道 > 粉雪 > 冰面（四种地形互不重叠，优先级只是保险）；
          普通压雪 → 熄灭 */
@@ -1837,7 +1883,7 @@
       function resetWorld() {
         px = 0; pz = 0; prevZ = 0; speed = 13; latVel = 0; steerVis = 0;
         distance = 0; score = 0; gateBonus = 0; gatesPassed = 0; elapsed = 0;
-        shake = 0; crashTimer = -1; fovKick = 0; sprayAcc = 0; puffAcc = 0;
+        shake = 0; crashTimer = -1; crashVy = 0; crashY = 0; crashSpin = 0; fovKick = 0; sprayAcc = 0; puffAcc = 0;
         riderY = groundH(0, 0); prevGroundY = riderY; riderVy = 0; airGap = 0; airTime = 0;
         landDip = 0; crouchPulse = 0; prevSteerSign = 0; poseLean = 0; poseCrouch = 0.4;
         riderZone = { p: 0, i: 0 }; lastZoneKey = ''; zoneTagEl.className = '';
@@ -1879,20 +1925,34 @@
         combo = 0; comboTimer = 0; slowmoT = 0; updateComboHUD(false); // 撞毁：连击清零、慢动作立即退出
         crashSound();
         shake = reducedMotion ? 0 : 0.85;
-        crashTimer = 0.75;
+        crashTimer = 1.05; // 翻滚约 1 秒，之后结算牌才从雪面升起
+        /* 撞击瞬间不再定格：沿速度方向被弹起翻滚——给一个向上的纵速和快翻滚角速度，
+           同时向四周爆开一圈雪雾（复用现有两层粒子池）；翻滚的逐帧推进在主循环 over 分支 */
+        crashVy = 4.6; crashY = riderY; crashSpin = reducedMotion ? 0 : 15;
+        burstSpray(26, 1.5); burstPuff(12, 1.3);
         document.getElementById('overWhy').textContent = why;
         silenceLayers(0.06); // 撞击后所有风声/刻滑快速收住再停
       }
       function showOver() {
         document.getElementById('zoneTag').className = '';
         lastZoneKey = '';
+        var fs = Math.floor(score);
         document.getElementById('rDist').textContent = Math.floor(distance) + ' m';
-        document.getElementById('rScore').textContent = Math.floor(score);
+        document.getElementById('rScore').textContent = fs;
         document.getElementById('rGates').textContent = gatesPassed;
-        var isBest = Math.floor(score) > bestScore;
-        if (isBest) bestScore = Math.floor(score);
-        document.getElementById('bestLine').textContent =
-          (isBest && score > 0 ? '新纪录！' : '本场最佳：') + bestScore + ' 分（本次打开页面期间）';
+        /* 成绩落盘：破历史最佳 / 破今日最佳分别判定（今日最佳 ≤ 历史最佳，
+           所以破历史必然同破今日，提示以历史为准） */
+        var brokeBest = fs > bestScore && fs > 0;
+        if (brokeBest) { bestScore = fs; saveBest(); }
+        var brokeToday = fs > todayBest && fs > 0;
+        if (brokeToday) { todayBest = fs; saveToday(); }
+        var rec = document.getElementById('recordLine');
+        if (brokeBest) { rec.textContent = '★ 新纪录！'; rec.classList.remove('hidden'); }
+        else if (brokeToday) { rec.textContent = '★ 今日新纪录！'; rec.classList.remove('hidden'); }
+        else rec.classList.add('hidden');
+        document.getElementById('bestLine').textContent = '历史最佳：' + bestScore + ' 分';
+        document.getElementById('todayLine').textContent = '今日最佳：' + todayBest + ' 分';
+        hBest.textContent = bestScore;
         document.getElementById('overVeil').classList.remove('hidden');
         steerEl.classList.remove('on');
       }
@@ -1901,6 +1961,7 @@
       document.getElementById('startBtn').addEventListener('click', function (e) { e.stopPropagation(); startGame(); });
       document.getElementById('againBtn').addEventListener('click', function (e) { e.stopPropagation(); startGame(); });
       document.getElementById('startVeil').addEventListener('click', function () { if (state === 'menu') startGame(); });
+      document.getElementById('overVeil').addEventListener('click', function () { if (state === 'over' && crashTimer < 0) startGame(); }); // 结算后点任意处重开（按钮自己 stopPropagation，不会双触发）
       muteBtn.textContent = muted ? '🔇' : '🔊';
       function setMuted(v) {
         muted = v;
@@ -2246,6 +2307,7 @@
               var fd = fmtDist(distance);
               hDist.textContent = fd.v; hDistUnit.textContent = ' ' + fd.u;
               hScore.textContent = Math.floor(score);
+              hBest.textContent = Math.max(bestScore, Math.floor(score)); // 本局分超过存档时，HUD 最佳格实时跟上
               updateGauge(speed * 3.6);
               comboBar.style.width = combo > 0 ? Math.round(comboTimer / COMBO_WINDOW * 100) + '%' : '0%';
             }
@@ -2254,9 +2316,21 @@
           if (state === 'over') {
             speed = Math.max(0, speed - dt * 14);
             pz -= speed * dt;
-            rider.rotation.x -= dt * 5.2;
-            rider.rotation.z += dt * 2.4;
-            rider.position.y += Math.sin(Math.min(1, (0.75 - crashTimer)) * Math.PI) * dt * 1.6;
+            /* 翻滚腾空：撞击的纵速把人抛起，重力拉回雪面，落雪时弹一下、翻滚随之衰减；
+               结算牌升起后翻滚渐止，人停在雪面上 */
+            crashVy -= 17 * dt;
+            crashY += crashVy * dt;
+            var cgy = groundH(px, pz) + 0.12;
+            if (crashY <= cgy) {
+              crashY = cgy;
+              if (crashVy < -1.5) { crashVy = -crashVy * 0.28; crashSpin *= 0.55; }
+              else crashVy = 0;
+            }
+            if (crashTimer > 0) crashSpin = Math.max(3.2, crashSpin - dt * 10);
+            else crashSpin = Math.max(0, crashSpin - dt * 14);
+            rider.rotation.x -= crashSpin * dt; // 沿速度方向（前方）前滚翻
+            rider.rotation.z += crashSpin * 0.1 * dt;
+            rider.position.set(px, crashY, pz);
             if (crashTimer > 0) { crashTimer -= dt; if (crashTimer <= 0) showOver(); }
           }
 
@@ -2390,6 +2464,11 @@
             var sway = Math.sin(tNow * 0.35) * 2.6;
             camTargetPos = new THREE.Vector3(sway, ry + 3.4, pz + 9.5);
             lookPt = new THREE.Vector3(valleyCenter(pz - 22) * 0.7, groundH(0, pz - 22) + 1.4, pz - 22);
+          } else if (state === 'over') {
+            /* 结算缓推：镜头慢慢贴近倒在雪面上的主角，注视点落在人身上，等结算牌升起 */
+            var vcOver = valleyCenter(pz);
+            camTargetPos = new THREE.Vector3(vcOver + (px - vcOver) * 0.75, ry + 3.1, pz + 7.4);
+            lookPt = new THREE.Vector3(px, crashY + 0.7, pz);
           } else {
             /* 相机防遮挡：抬高（+5.6 起）、拉远（身后 11.5m），横向只跟主角相对谷底偏移的一半、
                并始终向谷底中心收；注视点落在主角前方约 24m 的雪面上——视线顺着山谷开口
