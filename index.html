@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
     <meta name="color-scheme" content="light dark" />
     <link rel="icon" href="data:," />
-    <title>雪舞世界 Snow Dance World · 3D 单板滑雪</title>
+    <title>雪舞世界 Snow Dance World · 3D 滑雪（单板 / 双板）</title>
     <style>
       * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
       html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #0d1b2e; }
@@ -65,6 +65,32 @@
         display: none; align-items: center; justify-content: center;
       }
       #muteBtn.on { display: flex; }
+      /* 装备切换按钮（HUD）：与静音键同排，显示当前装备，点按或按 B 键原地换装备 */
+      #equipBtn {
+        position: fixed; top: calc(8px + env(safe-area-inset-top)); right: 64px; z-index: 6;
+        height: 44px; padding: 0 14px; border-radius: 10px; border: 1px solid rgba(160,200,245,.3);
+        background: rgba(8,20,38,.62); color: #eef4fb; font-size: 13.5px; font-weight: 700;
+        letter-spacing: .06em; cursor: pointer; font-family: inherit;
+        display: none; align-items: center; justify-content: center; white-space: nowrap;
+      }
+      #equipBtn.on { display: flex; }
+      #equipBtn:active { background: rgba(255, 122, 26, .75); }
+      /* ---------- 开始界面装备选择：两张并列卡片，选中态橙色高亮 ---------- */
+      .equipRow { display: flex; gap: 12px; margin: 18px 0 0; }
+      .equipCard {
+        flex: 1 1 0; min-height: 108px; padding: 13px 8px 11px; border-radius: 12px; cursor: pointer;
+        border: 1.5px solid rgba(150, 195, 245, .28); background: rgba(120, 170, 230, .07);
+        color: #c3d9f2; font-family: inherit; text-align: center;
+      }
+      .equipCard svg { display: block; margin: 0 auto 6px; }
+      .equipCard .eqName { font-size: 17px; font-weight: 800; color: #eef4fb; letter-spacing: .1em; }
+      .equipCard .eqEn { font-size: 10px; letter-spacing: .22em; color: #9fc2e8; margin-top: 2px; }
+      .equipCard .eqDesc { font-size: 11.5px; color: #a9c4e4; margin-top: 5px; line-height: 1.45; }
+      .equipCard.sel {
+        border-color: #ff8b2d; background: rgba(255, 122, 26, .16);
+        box-shadow: 0 0 0 1px rgba(255, 139, 45, .55), 0 8px 22px rgba(249, 106, 13, .22);
+      }
+      .equipCard.sel .eqName { color: #ffb37a; }
       /* 雪质提示：进入粉雪/冰面分区时在 HUD 下方亮起 */
       #zoneTag {
         position: fixed; left: 50%; top: calc(106px + env(safe-area-inset-top)); transform: translateX(-50%);
@@ -96,9 +122,11 @@
       .veil {
         position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center;
         padding: 18px; background: radial-gradient(ellipse at 50% 38%, rgba(10,25,48,0) 30%, rgba(6,14,28,.55) 100%);
+        overflow-y: auto; touch-action: pan-y; /* 矮屏时整牌可滚，开始按钮永远够得到 */
       }
       .veil.hidden { display: none; }
       .card {
+        margin: auto; touch-action: pan-y;
         text-align: center; max-width: 430px; width: 100%;
         background: rgba(7, 17, 33, .72); border: 1px solid rgba(150, 195, 245, .3);
         border-radius: 16px; padding: 26px 26px 22px; backdrop-filter: blur(10px);
@@ -112,7 +140,7 @@
       .title-en { margin: 4px 0 0; font-size: 13px; letter-spacing: .34em; color: #a9c8ec; font-weight: 600; }
       .tagline { margin: 14px 0 0; font-size: 14.5px; color: #d7e6f7; line-height: 1.65; }
       .howto {
-        margin: 16px auto 0; text-align: left; font-size: 13.5px; line-height: 2.0; color: #c3d9f2;
+        margin: 16px auto 0; text-align: left; font-size: 13.5px; line-height: 1.8; color: #c3d9f2;
         background: rgba(120, 170, 230, .09); border: 1px solid rgba(150,195,245,.16);
         border-radius: 10px; padding: 10px 16px;
       }
@@ -190,6 +218,18 @@
         #bestStat .val { font-size: 15px; }
         #zoneTag { top: calc(90px + env(safe-area-inset-top)); }
         #muteBtn { top: calc(100px + env(safe-area-inset-top)); }
+        #equipBtn { top: calc(152px + env(safe-area-inset-top)); right: 10px; }
+        /* 开始牌纵向收紧：加了装备选择卡后整牌更高，手机上必须一屏放下开始按钮 */
+        .card { padding: 16px 14px 14px; }
+        h1.title { font-size: 38px; }
+        .tagline { margin-top: 10px; font-size: 13.5px; }
+        .howto { margin-top: 12px; line-height: 1.5; font-size: 12.5px; padding: 8px 12px; }
+        .equipRow { margin-top: 12px; gap: 10px; }
+        .equipCard { min-height: 88px; padding: 9px 6px 8px; }
+        .equipCard svg { margin-bottom: 3px; }
+        .equipCard .eqDesc { font-size: 10.5px; margin-top: 3px; }
+        .bigbtn { margin-top: 14px; min-height: 50px; }
+        .fineprint { margin-top: 8px; }
       }
     </style>
   </head>
@@ -223,6 +263,7 @@
       </div>
     </div>
     <div id="zoneTag"></div>
+    <button id="equipBtn" aria-label="切换装备（B 键）" title="切换单板 / 双板（B 键）">单板 · 切换 ⇄</button>
     <button id="muteBtn" aria-label="静音切换">🔊</button>
 
     <div id="steer">
@@ -234,10 +275,10 @@
 
     <div class="veil" id="startVeil">
       <div class="card">
-        <p class="game-name">3 D 单 板 滑 雪</p>
+        <p class="game-name">3 D 滑 雪 · 单 板 / 双 板</p>
         <h1 class="title">雪舞世界</h1>
         <p class="title-en">SNOW DANCE WORLD</p>
-        <p class="tagline">踩着单板从雪山之巅一路舞下山，白天、黄昏、极光夜与黎明在滑行中流转。<br />压刃卷起雪雾——穿旗门、躲松树岩石，别摔！</p>
+        <p class="tagline">踩着单板或双板从雪山之巅一路舞下山，白天、黄昏、极光夜与黎明在滑行中流转。<br />压刃卷起雪雾——穿旗门、躲松树岩石，别摔！</p>
         <div class="howto">
           <div><span class="dot">▸</span> <b>转向</b>：按住屏幕左右按钮 / ← → 方向键 / 左右拖动</div>
           <div><span class="dot">▸</span> <b>穿旗门</b>：从红蓝旗门中间穿过，<b>+50 分</b>，门处闪光</div>
@@ -250,9 +291,22 @@
           <div><span class="dot">▸</span> <b>窄道</b>：木栅栏标示入口，两侧树墙收紧、地面有压雪车辙，稳住路线穿过去</div>
           <div><span class="dot">▸</span> <b>昼夜流转</b>：约 2 分半走完一轮——白天、黄昏、繁星极光夜、黎明，看右上角时段牌</div>
           <div><span class="dot">▸</span> 速度越快视野越开、风声越尖，活得越久分越高</div>
+          <div><span class="dot">▸</span> <b>换装备</b>：下方选单板 / 双板开局；滑行中按 <b>B 键</b> 或点右上角按钮随时原地切换，速度分数都不清零</div>
+        </div>
+        <div class="equipRow" role="group" aria-label="选择装备">
+          <button type="button" class="equipCard sel" data-equip="board" aria-label="选择单板">
+            <svg width="64" height="34" viewBox="0 0 64 34" aria-hidden="true"><g transform="rotate(-16 32 17)"><rect x="4" y="13" width="56" height="8" rx="4" fill="#ff7a1a"/><rect x="22" y="9" width="7" height="6" rx="2" fill="#dfeaf8"/><rect x="36" y="9" width="7" height="6" rx="2" fill="#dfeaf8"/></g></svg>
+            <div class="eqName">单板</div><div class="eqEn">SNOWBOARD</div>
+            <div class="eqDesc">侧身压刃 · 雪雾拖尾</div>
+          </button>
+          <button type="button" class="equipCard" data-equip="ski" aria-label="选择双板">
+            <svg width="64" height="34" viewBox="0 0 64 34" aria-hidden="true"><rect x="20" y="4" width="6" height="27" rx="3" fill="#ff7a1a"/><rect x="38" y="4" width="6" height="27" rx="3" fill="#ff7a1a"/><line x1="14" y1="6" x2="20" y2="24" stroke="#9fc2e8" stroke-width="2.4" stroke-linecap="round"/><line x1="50" y1="6" x2="44" y2="24" stroke="#9fc2e8" stroke-width="2.4" stroke-linecap="round"/></svg>
+            <div class="eqName">双板</div><div class="eqEn">SKI</div>
+            <div class="eqDesc">平行转弯 · 雪杖点杖</div>
+          </button>
         </div>
         <p class="fineprint" id="startBestLine"></p>
-        <button class="bigbtn" id="startBtn">开始滑行</button>
+        <button class="bigbtn" id="startBtn">开始滑行 · 单板</button>
         <p class="fineprint">点任意处或按空格也能开始 · 建议开声音，有风声 · M 键或右上角喇叭可静音</p>
       </div>
     </div>
@@ -1341,6 +1395,182 @@
           arm.el.rotation.x = damp(arm.el.rotation.x, -arm.s * bend * 0.35, 0.002, dt);
         }
       }
+      /* ================= 双板主角：真人滑雪者（BACKLOG 9） =================
+         与单板主角同色系：橙色雪服上衣、深色雪裤、头盔雪镜手套。面朝下滑方向（-Z），
+         双脚左右分开站在两支平行双板上（板面沿用火焰纹 + 几何箭纹、板头上翘），
+         双手各持一支雪杖（深色杖身、橙色握把与杖篮）。骨骼与单板同构：
+         腿 = 髋/膝双骨 IK、上身组/躯干组/手臂两级关节，姿态在主循环里走双板分支
+         （平行压刃、换刃点杖、双腿对称屈伸），速度/转向数值与单板完全一致 */
+      var equip = 'board'; // 'board' 单板（默认） | 'ski' 双板
+      var skiRig = new THREE.Group(); rider.add(skiRig); skiRig.visible = false;
+      var skiBoardG = new THREE.Group(); skiRig.add(skiBoardG);
+      var skiSideGs = [];
+      var skiBaseMat = new THREE.MeshStandardMaterial({ color: 0x0d2733, roughness: 0.38 });
+      [-1, 1].forEach(function (s) {
+        var sg = new THREE.Group(); sg.position.x = s * 0.17; skiBoardG.add(sg); skiSideGs.push({ s: s, g: sg });
+        part(new THREE.BoxGeometry(0.115, 0.04, 1.62), skiBaseMat, 0, 0.055, 0, sg); // 板身：沿 -Z，与另一支平行
+        var sTop = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 1.58),
+          new THREE.MeshStandardMaterial({ map: boardTex, roughness: 0.3 }));
+        sTop.rotation.x = -Math.PI / 2; sTop.position.set(0, 0.078, 0); sTop.receiveShadow = true; sg.add(sTop);
+        var sTip = part(new THREE.BoxGeometry(0.115, 0.035, 0.26), accentMat, 0, 0.095, -0.9, sg); sTip.rotation.x = -0.5; // 板头上翘
+        var sTail = part(new THREE.BoxGeometry(0.115, 0.035, 0.15), accentMat, 0, 0.08, 0.86, sg); sTail.rotation.x = 0.34;
+        part(new THREE.BoxGeometry(0.14, 0.035, 0.3), darkMat, 0, 0.095, 0.02, sg);   // 固定器
+        part(new THREE.BoxGeometry(0.135, 0.16, 0.29), bootMat, 0, 0.19, 0.03, sg);   // 雪靴：靴尖朝 -Z
+        part(new THREE.BoxGeometry(0.14, 0.05, 0.3), darkMat, 0, 0.115, 0.03, sg);    // 靴底
+      });
+      // 上身组（双板）：髋部左右宽、躯干正面朝 -Z，站姿双腿分开与肩同宽
+      var skiBodyG = new THREE.Group(); skiRig.add(skiBodyG);
+      part(new THREE.BoxGeometry(0.46, 0.2, 0.3), pantsMat, 0, 0.99, 0, skiBodyG); // 髋部
+      var skiTorsoG = new THREE.Group(); skiTorsoG.position.set(0, 1.04, 0); skiBodyG.add(skiTorsoG);
+      part(new THREE.BoxGeometry(0.5, 0.6, 0.28), jacketMat, 0, 0.32, 0, skiTorsoG);  // 躯干：正面朝 -Z
+      part(new THREE.BoxGeometry(0.52, 0.1, 0.3), jacketMat, 0, 0.04, 0, skiTorsoG);  // 衣摆
+      part(new THREE.BoxGeometry(0.51, 0.07, 0.29), darkMat, 0, 0.1, 0, skiTorsoG);   // 腰带
+      part(new THREE.CylinderGeometry(0.055, 0.06, 0.09, 7), skinMat, 0, 0.66, -0.02, skiTorsoG); // 脖子
+      var skiHeadG = new THREE.Group(); skiHeadG.position.set(0, 0.8, -0.02); skiTorsoG.add(skiHeadG);
+      part(new THREE.SphereGeometry(0.14, 12, 10), skinMat, 0, 0, 0, skiHeadG);
+      part(new THREE.SphereGeometry(0.158, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.58), helmetMat, 0, 0.018, 0, skiHeadG); // 头盔
+      part(new THREE.BoxGeometry(0.16, 0.035, 0.1), helmetMat, 0, 0.155, 0.02, skiHeadG); // 盔顶通风口
+      part(new THREE.CylinderGeometry(0.147, 0.147, 0.05, 14, 1, true), darkMat, 0, 0.005, 0, skiHeadG); // 雪镜带
+      part(new THREE.BoxGeometry(0.25, 0.08, 0.1), goggleMat, 0, 0.005, -0.105, skiHeadG); // 反光雪镜（朝 -Z）
+      // 雪杖：深色杖身 + 橙色握把 + 橙色杖篮 + 杖尖，原点在握把处、沿 -Y 向下
+      var poleShaftMat = new THREE.MeshStandardMaterial({ color: 0x232830, roughness: 0.45, metalness: 0.4 });
+      function buildPole() {
+        var pg = new THREE.Group();
+        var shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.011, 0.95, 6), poleShaftMat);
+        shaft.position.y = -0.45; shaft.castShadow = true; pg.add(shaft);
+        var grip = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.026, 0.15, 7), accentMat);
+        grip.position.y = -0.03; grip.castShadow = true; pg.add(grip);
+        var basket = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.02, 10), accentMat);
+        basket.position.y = -0.84; basket.castShadow = true; pg.add(basket);
+        var tip = new THREE.Mesh(new THREE.ConeGeometry(0.014, 0.07, 6), darkMat);
+        tip.rotation.x = Math.PI; tip.position.y = -0.95; pg.add(tip);
+        return pg;
+      }
+      // 手臂（双板）：肩/肘两级关节，前臂末端手套握着雪杖
+      var skiArms = [];
+      [-1, 1].forEach(function (s) {
+        var sh = new THREE.Group(); sh.position.set(s * 0.29, 0.52, 0); skiTorsoG.add(sh);
+        sh.add(limbMesh(0.064, 0.052, 0.34, jacketMat));
+        var el = new THREE.Group(); el.position.set(0, -0.34, 0); sh.add(el);
+        var eb = new THREE.Mesh(new THREE.SphereGeometry(0.058, 8, 7), jacketMat); eb.castShadow = true; el.add(eb);
+        el.add(limbMesh(0.05, 0.042, 0.3, jacketMat));
+        var glove = new THREE.Mesh(new THREE.SphereGeometry(0.085, 8, 7), darkMat);
+        glove.position.set(0, -0.34, 0); glove.castShadow = true; el.add(glove);
+        var pole = buildPole(); pole.position.set(0, -0.34, 0); pole.rotation.x = 0.55; el.add(pole);
+        skiArms.push({ s: s, sh: sh, el: el, pole: pole });
+      });
+      // 腿（双板）：髋/膝双骨 IK，踝点左右分开、膝盖朝下滑方向（-Z），双腿对称屈伸
+      var skiLegs = [];
+      [-1, 1].forEach(function (s) {
+        var thigh = limbMesh(0.092, 0.07, LEG_L1, pantsMat); skiRig.add(thigh);
+        var shin = limbMesh(0.068, 0.054, LEG_L2, pantsMat); skiRig.add(shin);
+        var knee = new THREE.Mesh(new THREE.SphereGeometry(0.076, 8, 7), pantsMat);
+        knee.castShadow = true; skiRig.add(knee);
+        skiLegs.push({ s: s, thigh: thigh, shin: shin, knee: knee });
+      });
+      function solveLegSki(leg, hipY) {
+        _H.set(leg.s * 0.16, hipY, 0);
+        _A.set(leg.s * 0.17, 0.3, 0);
+        _D.subVectors(_A, _H);
+        var d = clamp(_D.length(), 0.2, LEG_L1 + LEG_L2 - 0.02);
+        _DIR.copy(_D).normalize();
+        var a = (LEG_L1 * LEG_L1 - LEG_L2 * LEG_L2 + d * d) / (2 * d);
+        var h = Math.sqrt(Math.max(0.0004, LEG_L1 * LEG_L1 - a * a));
+        _P.set(leg.s * 0.15, 0.12, -1); // 膝盖朝向：下滑方向（-Z）略向外
+        _P.addScaledVector(_DIR, -_P.dot(_DIR));
+        if (_P.lengthSq() < 0.001) _P.set(0, 0, -1); else _P.normalize();
+        _K.copy(_H).addScaledVector(_DIR, a).addScaledVector(_P, h);
+        placeLimb(leg.thigh, _H, _K);
+        placeLimb(leg.shin, _K, _A);
+        leg.knee.position.copy(_K);
+      }
+      /* 手臂（双板）：双手持杖随身侧摆动；转弯时内侧手前送、外侧手点杖——
+         点杖由主循环换刃事件点火（skiPolePlantT/Side），点杖侧手臂下送、
+         雪杖转到近垂直，杖尖触雪一瞬（雪雾在点火处喷） */
+      var skiPolePlantT = 0, skiPolePlantSide = 1;
+      function poseArmsSki(tNow, speedN, airBlend, dt) {
+        var leanN = clamp(poseLean, -1, 1);
+        for (var i = 0; i < skiArms.length; i++) {
+          var arm = skiArms[i];
+          var planting = skiPolePlantT > 0 && arm.s === skiPolePlantSide;
+          var reach = 0.34 + speedN * 0.16 + airBlend * 0.35 + arm.s * leanN * 0.22
+                    + Math.sin(tNow * 1.6 + (arm.s < 0 ? 0 : 2.1)) * 0.04;
+          if (planting) reach = -0.12; // 点杖侧手臂向下向后送，杖尖扎进雪里
+          arm.sh.rotation.x = damp(arm.sh.rotation.x, reach, 0.002, dt);
+          var spread = 0.3 + airBlend * 0.5 + Math.abs(leanN) * 0.1;
+          arm.sh.rotation.z = damp(arm.sh.rotation.z, arm.s * spread, 0.002, dt);
+          var bend = planting ? 0.12 : 0.48 + poseCrouch * 0.15 + airBlend * 0.25;
+          arm.el.rotation.x = damp(arm.el.rotation.x, bend, 0.002, dt);
+          arm.el.rotation.z = damp(arm.el.rotation.z, arm.s * bend * 0.2, 0.002, dt);
+          var poleTilt = planting ? 0.02 : 0.55 + speedN * 0.18 - airBlend * 0.3; // 点杖时杖身近垂直触雪，平时杖尖向后拖
+          arm.pole.rotation.x = damp(arm.pole.rotation.x, poleTilt, 0.001, dt);
+          arm.pole.rotation.z = damp(arm.pole.rotation.z, arm.s * -0.1, 0.002, dt);
+        }
+        if (skiPolePlantT > 0) skiPolePlantT -= dt;
+      }
+      /* 撞树翻滚时脱手飞出的雪杖（纯视觉，不影响结算与重开）：两支独立雪杖平时藏起来，
+         endGame 在双板模式下点火，手里的杖同时隐藏，落地后停在雪面上 */
+      var flyPoles = [];
+      for (var fpi = 0; fpi < 2; fpi++) {
+        var fpole = buildPole(); fpole.visible = false; scene.add(fpole);
+        flyPoles.push({ g: fpole, vx: 0, vy: 0, vz: 0, rx: 0, rz: 0, active: false });
+      }
+      function launchFlyPoles() {
+        for (var i = 0; i < flyPoles.length; i++) {
+          var f = flyPoles[i];
+          f.active = true; f.g.visible = true;
+          f.g.position.set(px + (i === 0 ? -0.4 : 0.4), riderY + 0.9, pz);
+          f.g.rotation.set(0, 0, 0);
+          f.vx = (i === 0 ? -1 : 1) * (1.6 + Math.random() * 1.8);
+          f.vy = 3.2 + Math.random() * 1.8;
+          f.vz = 2.2 + Math.random() * 2;
+          f.rx = (Math.random() - 0.5) * 9; f.rz = (Math.random() - 0.5) * 9;
+        }
+        for (var j = 0; j < skiArms.length; j++) skiArms[j].pole.visible = false; // 手里的杖已经飞出去了
+      }
+      function updateFlyPoles(dt) {
+        for (var i = 0; i < flyPoles.length; i++) {
+          var f = flyPoles[i];
+          if (!f.active) continue;
+          f.vy -= 15 * dt;
+          f.g.position.x += f.vx * dt;
+          f.g.position.y += f.vy * dt;
+          f.g.position.z += f.vz * dt;
+          f.g.rotation.x += f.rx * dt;
+          f.g.rotation.z += f.rz * dt;
+          var fgy = groundH(f.g.position.x, f.g.position.z) + 0.06;
+          if (f.g.position.y <= fgy) {
+            f.g.position.y = fgy;
+            if (Math.abs(f.vy) > 1.2) { f.vy = -f.vy * 0.3; f.rx *= 0.5; f.rz *= 0.5; }
+            else { f.vy = 0; f.vx *= 0.8; f.vz *= 0.8; f.rx = 0; f.rz = 0; }
+          }
+        }
+      }
+      function resetFlyPoles() {
+        for (var i = 0; i < flyPoles.length; i++) { flyPoles[i].active = false; flyPoles[i].g.visible = false; }
+        for (var j = 0; j < skiArms.length; j++) skiArms[j].pole.visible = true;
+      }
+      /* ================= 装备切换：只换模型与动作表现 =================
+         位置、速度、分数、连击、最佳成绩全保留——不重开、不清零，成绩存档仍共用一份 */
+      var equipBtnEl = document.getElementById('equipBtn');
+      function applyEquip() {
+        var isSki = equip === 'ski';
+        boardG.visible = !isSki;
+        bodyG.visible = !isSki;
+        for (var i = 0; i < legs.length; i++) {
+          legs[i].thigh.visible = !isSki; legs[i].shin.visible = !isSki; legs[i].knee.visible = !isSki;
+        }
+        skiRig.visible = isSki;
+        var cards = document.querySelectorAll('.equipCard');
+        for (var c = 0; c < cards.length; c++) cards[c].classList.toggle('sel', cards[c].getAttribute('data-equip') === equip);
+        var sb = document.getElementById('startBtn');
+        if (sb) sb.textContent = isSki ? '开始滑行 · 双板' : '开始滑行 · 单板';
+        if (equipBtnEl) equipBtnEl.textContent = isSki ? '双板 · 切换 ⇄' : '单板 · 切换 ⇄';
+      }
+      function setEquip(next) { equip = next === 'ski' ? 'ski' : 'board'; skiPolePlantT = 0; applyEquip(); }
+      function toggleEquip() { setEquip(equip === 'ski' ? 'board' : 'ski'); }
+      applyEquip();
+
       rider.position.set(0, groundH(0, 0), 0);
       scene.add(rider);
 
@@ -1890,6 +2120,7 @@
         combo = 0; comboTimer = 0; timeScale = 1; slowmoT = 0; slowmoCd = 0; updateComboHUD(false);
         for (var fi = 0; fi < flashes.length; fi++) { flashes[fi].t = -1; flashes[fi].grp.visible = false; }
         rampHere = 0; prevRampH = 0; narrowHere = 0; airFromJump = false;
+        skiPolePlantT = 0; resetFlyPoles(); // 飞出的雪杖收回手里，装备选择保持不变
         rider.rotation.set(0, 0, 0);
         for (var i = 0; i < chunks.length; i++) {
           var ch = chunks[i];
@@ -1918,7 +2149,7 @@
         state = 'play';
         document.getElementById('startVeil').classList.add('hidden');
         document.getElementById('overVeil').classList.add('hidden');
-        hudEl.classList.add('on'); steerEl.classList.add('on'); muteBtn.classList.add('on');
+        hudEl.classList.add('on'); steerEl.classList.add('on'); muteBtn.classList.add('on'); equipBtnEl.classList.add('on');
       }
       function endGame(why) {
         state = 'over';
@@ -1930,6 +2161,7 @@
            同时向四周爆开一圈雪雾（复用现有两层粒子池）；翻滚的逐帧推进在主循环 over 分支 */
         crashVy = 4.6; crashY = riderY; crashSpin = reducedMotion ? 0 : 15;
         burstSpray(26, 1.5); burstPuff(12, 1.3);
+        if (equip === 'ski' && !reducedMotion) launchFlyPoles(); // 双板：雪杖随翻滚脱手飞出（纯视觉）
         document.getElementById('overWhy').textContent = why;
         silenceLayers(0.06); // 撞击后所有风声/刻滑快速收住再停
       }
@@ -1955,9 +2187,20 @@
         hBest.textContent = bestScore;
         document.getElementById('overVeil').classList.remove('hidden');
         steerEl.classList.remove('on');
+        equipBtnEl.classList.remove('on');
       }
 
       /* ================= 输入 ================= */
+      /* 装备选择卡片：点选只切换装备、不触发开始（stopPropagation 挡住遮罩的点击开始） */
+      var equipCards = document.querySelectorAll('.equipCard');
+      for (var eci = 0; eci < equipCards.length; eci++) {
+        equipCards[eci].addEventListener('click', function (e) {
+          e.stopPropagation();
+          setEquip(this.getAttribute('data-equip'));
+        });
+      }
+      /* HUD 装备切换按钮：滑行中原地换装备（与 B 键同效） */
+      equipBtnEl.addEventListener('click', function (e) { e.stopPropagation(); initAudio(); toggleEquip(); });
       document.getElementById('startBtn').addEventListener('click', function (e) { e.stopPropagation(); startGame(); });
       document.getElementById('againBtn').addEventListener('click', function (e) { e.stopPropagation(); startGame(); });
       document.getElementById('startVeil').addEventListener('click', function () { if (state === 'menu') startGame(); });
@@ -1975,6 +2218,7 @@
       });
       window.addEventListener('keydown', function (e) {
         if (e.code === 'KeyM') { initAudio(); setMuted(!muted); return; }
+        if (e.code === 'KeyB') { toggleEquip(); return; } // B 键：单板 / 双板原地切换（开始界面=改选择，滑行中=直接换模型）
         if (e.code === 'ArrowLeft' || e.code === 'KeyA') { keys.l = true; e.preventDefault(); }
         if (e.code === 'ArrowRight' || e.code === 'KeyD') { keys.r = true; e.preventDefault(); }
         if (e.code === 'Space' || e.code === 'Enter') {
@@ -2278,6 +2522,15 @@
               if (prevSteerSign !== 0 && sSign !== prevSteerSign && speed > 10) {
                 carveEdgeSound(carve);
                 crouchPulse = 0.34;
+                if (equip === 'ski') {
+                  /* 双板点杖：换刃发起新转弯时，外侧（新弯外侧）雪杖点杖——
+                     杖尖触雪一瞬在杖尖位置扬起一小团雪雾，动作本体在 poseArmsSki 里演 */
+                  skiPolePlantSide = sSign > 0 ? -1 : 1;
+                  skiPolePlantT = 0.3;
+                  var plantX = px + skiPolePlantSide * 0.52, plantY = groundH(plantX, pz);
+                  for (var pli = 0; pli < 4; pli++) spawnSpray(plantX, plantY, pz + 0.25, 0.55, skiPolePlantSide);
+                  spawnPuff(plantX, plantY, pz + 0.25, 0.6, skiPolePlantSide);
+                }
                 var ebN = 6 + Math.round(carve * 10);
                 for (var ebi = 0; ebi < ebN; ebi++) spawnSpray(px, groundH(px, pz), pz, 0.8 + carve * 0.7, sSign > 0 ? -1 : 1);
                 spawnPuff(px, groundH(px, pz), pz, 0.9, sSign > 0 ? -1 : 1);
@@ -2290,7 +2543,9 @@
             var spraySide = steerVis >= 0 ? -1 : 1; // 雪从压刃的外侧（转弯外侧）喷出
             while (sprayAcc > 1) {
               sprayAcc -= 1;
-              spawnSpray(px, gy, pz, 0.45 + carve * 1.15 + speed * 0.012, spraySide);
+              /* 双板：雪雾从两支板尾交替扬起（双板板尾扬雪）；单板沿用板尾中心一处 */
+              var sprayX = equip === 'ski' ? px + (sprayIdx % 2 === 0 ? -0.17 : 0.17) : px;
+              spawnSpray(sprayX, gy, pz, 0.45 + carve * 1.15 + speed * 0.012, spraySide);
               if (carve > 0.55 && Math.random() < 0.35) spawnSpray(px, gy, pz, 0.4, -spraySide); // 深压刃时内侧也溅一点
             }
             /* 拖尾雾团：刻滑时持续在身后留一串大雾团，形成弯道雪雾拖尾 */
@@ -2331,6 +2586,7 @@
             rider.rotation.x -= crashSpin * dt; // 沿速度方向（前方）前滚翻
             rider.rotation.z += crashSpin * 0.1 * dt;
             rider.position.set(px, crashY, pz);
+            updateFlyPoles(dt); // 双板模式下脱手飞出的雪杖跟着翻滚/弹跳/落雪停住
             if (crashTimer > 0) { crashTimer -= dt; if (crashTimer <= 0) showOver(); }
           }
 
@@ -2400,17 +2656,39 @@
             /* 冰面打滑：板尾轻微左右摆动（只动视觉，路线仍由惯性主导） */
             var iceWag = (airBlend < 0.1 && state === 'play') ? Math.sin(tNow * 6.4) * 0.06 * riderZone.i : 0;
             rider.rotation.y = damp(rider.rotation.y, steerVis * 0.3 + iceWag, 0.004, dt);
-            boardG.rotation.y = iceWag * 0.8;
-            boardG.rotation.z = damp(boardG.rotation.z, -poseLean * 0.32, 0.0012, dt); // 板面比身体多压一截刃
-            bodyG.rotation.z = damp(bodyG.rotation.z, -poseLean * 0.16, 0.002, dt);
             var bob = Math.sin(tNow * (state === 'play' ? 7 : 2)) * (state === 'play' ? 0.028 : 0.014) * (1 - airBlend);
-            bodyG.position.y = -poseCrouch * 0.24 + bob; // 重心下沉量
-            torsoG.rotation.z = damp(torsoG.rotation.z, -(0.1 + poseCrouch * 0.3 + speedN * 0.08), 0.002, dt); // 髋部前折
-            torsoG.rotation.y = damp(torsoG.rotation.y, poseLean * 0.4, 0.002, dt); // 肩线转入弯内
-            poseArms(tNow, speedN, airBlend, dt);
-            /* 双腿双骨 IK：髋随重心升降，靴子始终钉在固定器上 */
-            var hipY = bodyG.position.y + 0.99;
-            solveLeg(legs[0], hipY); solveLeg(legs[1], hipY);
+            if (equip === 'ski') {
+              /* ---- 双板姿态：平行转弯 ----
+                 两支板同向压刃（整组绕下滑轴滚转，倾角随转向力度），身体向弯内倾；
+                 屈膝泵压/落地缓冲与单板同一套 poseCrouch 逻辑，但双腿对称屈伸；
+                 空中双板并拢、收腿（airBlend 已把 crouchT 拉向收腿姿态） */
+              skiBoardG.rotation.y = iceWag * 0.8;
+              skiBoardG.rotation.z = damp(skiBoardG.rotation.z, -poseLean * 0.34, 0.0012, dt); // 双板同向压刃
+              skiBodyG.rotation.z = damp(skiBodyG.rotation.z, -poseLean * 0.18, 0.002, dt);   // 身体向弯内倾
+              skiBodyG.position.y = -poseCrouch * 0.24 + bob; // 重心下沉量（与单板同逻辑）
+              skiTorsoG.rotation.x = damp(skiTorsoG.rotation.x, -(0.12 + poseCrouch * 0.28 + speedN * 0.08), 0.002, dt); // 髋部前折（朝 -Z）
+              skiTorsoG.rotation.y = damp(skiTorsoG.rotation.y, poseLean * 0.35, 0.002, dt); // 肩线转入弯内
+              for (var sgi = 0; sgi < skiSideGs.length; sgi++) {
+                var sgx = skiSideGs[sgi];
+                sgx.g.position.x = damp(sgx.g.position.x, sgx.s * 0.17 * (1 - airBlend * 0.38), 0.001, dt); // 空中双板并拢
+              }
+              poseArmsSki(tNow, speedN, airBlend, dt);
+              /* 双腿双骨 IK：髋随重心升降，靴子始终钉在固定器上，双腿对称 */
+              var hipYSki = skiBodyG.position.y + 0.99;
+              solveLegSki(skiLegs[0], hipYSki); solveLegSki(skiLegs[1], hipYSki);
+            } else {
+              /* ---- 单板姿态（原有） ---- */
+              boardG.rotation.y = iceWag * 0.8;
+              boardG.rotation.z = damp(boardG.rotation.z, -poseLean * 0.32, 0.0012, dt); // 板面比身体多压一截刃
+              bodyG.rotation.z = damp(bodyG.rotation.z, -poseLean * 0.16, 0.002, dt);
+              bodyG.position.y = -poseCrouch * 0.24 + bob; // 重心下沉量
+              torsoG.rotation.z = damp(torsoG.rotation.z, -(0.1 + poseCrouch * 0.3 + speedN * 0.08), 0.002, dt); // 髋部前折
+              torsoG.rotation.y = damp(torsoG.rotation.y, poseLean * 0.4, 0.002, dt); // 肩线转入弯内
+              poseArms(tNow, speedN, airBlend, dt);
+              /* 双腿双骨 IK：髋随重心升降，靴子始终钉在固定器上 */
+              var hipY = bodyG.position.y + 0.99;
+              solveLeg(legs[0], hipY); solveLeg(legs[1], hipY);
+            }
           }
 
           /* --- 地形回收 --- */
