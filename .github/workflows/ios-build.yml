@@ -1,0 +1,51 @@
+# iOS unsigned build for Snow Dance World (Capacitor).
+# Push to main or manual run: builds the Capacitor iOS app on a hosted Mac
+# and uploads an UNSIGNED .ipa as an artifact. Signing is NOT done here —
+# it needs an Apple Developer Program membership ($99/year) + certificates,
+# which Francis has not enrolled in yet. Once enrolled, add signing secrets
+# and drop CODE_SIGNING_ALLOWED=NO.
+name: iOS build (unsigned)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Copy web assets to www/
+        run: npm run copy-web
+
+      - name: Sync Capacitor iOS project
+        run: npx cap sync ios
+
+      - name: Archive (unsigned)
+        run: >
+          xcodebuild -project ios/App/App.xcodeproj -scheme App
+          -configuration Release -destination 'generic/platform=iOS'
+          -archivePath build/App.xcarchive archive CODE_SIGNING_ALLOWED=NO
+
+      - name: Package unsigned .ipa
+        run: |
+          mkdir -p build/Payload
+          cp -r build/App.xcarchive/Products/Applications/App.app build/Payload/
+          cd build && zip -r App-unsigned.ipa Payload
+
+      - name: Upload unsigned .ipa
+        uses: actions/upload-artifact@v4
+        with:
+          name: SnowDanceWorld-unsigned-ipa
+          path: build/App-unsigned.ipa
+          retention-days: 14
