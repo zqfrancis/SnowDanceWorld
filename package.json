@@ -1,0 +1,27 @@
+{
+  "name": "snowdanceworld",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "copy-web": "mkdir -p www && cp index.html privacy.html www/",
+    "sync": "npm run copy-web && npx cap sync"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zqfrancis/SnowDanceWorld.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/zqfrancis/SnowDanceWorld/issues"
+  },
+  "homepage": "https://github.com/zqfrancis/SnowDanceWorld#readme",
+  "dependencies": {
+    "@capacitor/android": "^8.6.2",
+    "@capacitor/cli": "^8.6.2",
+    "@capacitor/core": "^8.6.2",
+    "@capacitor/ios": "^8.6.2"
+  }
+}
