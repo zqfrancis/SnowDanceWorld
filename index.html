@@ -102,6 +102,16 @@
       #zoneTag.ice { background: rgba(140, 195, 240, .85); color: #0d2c4a; border: 1px solid rgba(210, 240, 255, .9); }
       #zoneTag.jump { background: rgba(255, 122, 26, .9); color: #fff; border: 1px solid rgba(255, 210, 160, .9); }
       #zoneTag.narrow { background: rgba(24, 68, 44, .88); color: #dff5e4; border: 1px solid rgba(140, 220, 170, .8); }
+      /* ---------- 天气指示格 + 天气切换提示（第 10 项升级） ---------- */
+      #weatherStat .vis { font-size: 10px; color: #9fc2e8; letter-spacing: .04em; margin-top: 1px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+      #weatherToast {
+        position: fixed; left: 50%; top: 32%; transform: translate(-50%, -50%); z-index: 7;
+        padding: 10px 22px 11px; border-radius: 999px; pointer-events: none; white-space: nowrap;
+        background: rgba(8, 20, 38, .72); border: 1px solid rgba(160, 200, 245, .4);
+        font-size: 17px; font-weight: 800; letter-spacing: .08em; color: #eef4fb;
+        opacity: 0; transition: opacity .45s ease; backdrop-filter: blur(6px);
+      }
+      #weatherToast.show { opacity: 1; }
 
       /* ---------- touch steer buttons ---------- */
       #steer {
@@ -217,6 +227,10 @@
         #bestStat { min-width: 50px; padding-left: 4px; padding-right: 4px; }
         #bestStat .val { font-size: 15px; }
         #zoneTag { top: calc(90px + env(safe-area-inset-top)); }
+        /* 天气格加入后 HUD 共七格：竖屏允许换行居中，避免横向溢出挡雪道 */
+        .hudbar { flex-wrap: wrap; justify-content: center; max-width: 97vw; }
+        #weatherStat { min-width: 64px; padding-left: 6px; padding-right: 6px; }
+        #weatherToast { font-size: 14px; max-width: 92vw; white-space: normal; text-align: center; }
         #muteBtn { top: calc(100px + env(safe-area-inset-top)); }
         #equipBtn { top: calc(152px + env(safe-area-inset-top)); right: 10px; }
         /* 开始牌纵向收紧：加了装备选择卡后整牌更高，手机上必须一屏放下开始按钮 */
@@ -260,9 +274,11 @@
         <div class="stat" id="bestStat"><div class="lab">最佳 BEST</div><div class="val"><span id="hBest">0</span></div></div>
         <div class="stat" id="comboStat"><div class="lab">连击 COMBO</div><div class="val" id="hCombo">×1</div><div class="cbar"><i id="comboBar"></i></div></div>
         <div class="stat"><div class="lab">时段 PHASE</div><div class="val" id="hPhase" style="font-size:15px">☀️ 白天</div></div>
+        <div class="stat" id="weatherStat"><div class="lab">天气 WEATHER</div><div class="val" id="hWeather" style="font-size:15px">☀️ 晴雪</div><div class="vis" id="hVis">能见度 250m</div></div>
       </div>
     </div>
     <div id="zoneTag"></div>
+    <div id="weatherToast"></div>
     <button id="equipBtn" aria-label="切换装备（B 键）" title="切换单板 / 双板（B 键）">单板 · 切换 ⇄</button>
     <button id="muteBtn" aria-label="静音切换">🔊</button>
 
@@ -290,6 +306,7 @@
           <div><span class="dot">▸</span> <b>跳台</b>：橙旗标示的雪包跳台，冲上台顶腾空，落地按腾空时长<b>加分</b>，空中还能轻微修方向</div>
           <div><span class="dot">▸</span> <b>窄道</b>：木栅栏标示入口，两侧树墙收紧、地面有压雪车辙，稳住路线穿过去</div>
           <div><span class="dot">▸</span> <b>昼夜流转</b>：约 2 分半走完一轮——白天、黄昏、繁星极光夜、黎明，看右上角时段牌</div>
+          <div><span class="dot">▸</span> <b>天气流转</b>：晴雪 → 中雪 → 暴风雪 → 雾雪循环往复，雪势、侧风与能见度随之呼吸——暴风雪里雾最浓、障碍最晚才看清，看右上角天气牌</div>
           <div><span class="dot">▸</span> 速度越快视野越开、风声越尖，活得越久分越高</div>
           <div><span class="dot">▸</span> <b>换装备</b>：下方选单板 / 双板开局；滑行中按 <b>B 键</b> 或点右上角按钮随时原地切换，速度分数都不清零</div>
         </div>
@@ -307,7 +324,7 @@
         </div>
         <p class="fineprint" id="startBestLine"></p>
         <button class="bigbtn" id="startBtn">开始滑行 · 单板</button>
-        <p class="fineprint">点任意处或按空格也能开始 · 建议开声音，有风声 · M 键或右上角喇叭可静音 · <a href="privacy.html" onclick="event.stopPropagation()" style="color:#8fb0d6;">隐私 Privacy</a></p>
+        <p class="fineprint">点任意处或按空格也能开始 · 建议开声音，有风声 · M 键或右上角喇叭可静音 · v14</p>
       </div>
     </div>
 
@@ -1895,20 +1912,22 @@
         var sf = clamp(speedNow / 31, 0, 1);
         var p = riderZone.p, ic = riderZone.i;
         var onSnow = airGapNow <= 0.05 ? 1 : 0.25; // 腾空时板离雪：刻滑/刮冰收掉，风声保留
+        /* 天气侧风联动（第 10 项）：只调已有三层风的参数——侧风越强，风声音量与截止频率微升，暴风雪最响 */
+        var wBoost = 1 + weatherWind * 0.55, wFreq = 1 + weatherWind * 0.3;
         /* 底层：持续风，音量与截止随速度；粉雪变闷（截止再压低、音量略降） */
-        windGain.gain.setTargetAtTime((0.022 + Math.pow(sf, 1.5) * 0.155) * (1 - p * 0.22), t, 0.15);
-        windFilter.frequency.setTargetAtTime((250 + speedNow * 34) * (1 - p * 0.42 + ic * 0.08), t, 0.12);
+        windGain.gain.setTargetAtTime((0.022 + Math.pow(sf, 1.5) * 0.155) * (1 - p * 0.22) * wBoost, t, 0.15);
+        windFilter.frequency.setTargetAtTime((250 + speedNow * 34) * (1 - p * 0.42 + ic * 0.08) * wFreq, t, 0.12);
         /* 中层呼啸：sf 约 0.28 起渐入，带通中心随速度上扫；粉雪里同步变闷 */
         var midAmt = clamp((sf - 0.28) / 0.38, 0, 1); midAmt = midAmt * midAmt * (3 - 2 * midAmt);
         if (windBP && windBPGain) {
-          windBP.frequency.setTargetAtTime((480 + speedNow * 46 + carveAmt * 260) * (1 - p * 0.25), t, 0.12);
-          windBPGain.gain.setTargetAtTime(midAmt * 0.085 * (1 - p * 0.2), t, 0.15);
+          windBP.frequency.setTargetAtTime((480 + speedNow * 46 + carveAmt * 260) * (1 - p * 0.25) * wFreq, t, 0.12);
+          windBPGain.gain.setTargetAtTime(midAmt * 0.085 * (1 - p * 0.2) * wBoost, t, 0.15);
         }
-        /* 高层尖啸：sf 约 0.74 起才出现，越接近极速越尖越响 */
+        /* 高层尖啸：sf 约 0.74 起才出现，越接近极速越尖越响；暴风雪里门槛略降、来得更早 */
         if (whistleOsc && whistleGain) {
-          var hiAmt = clamp((sf - 0.74) / 0.26, 0, 1);
+          var hiAmt = clamp((sf - 0.74 + weatherWind * 0.1) / 0.26, 0, 1);
           whistleOsc.frequency.setTargetAtTime(760 + hiAmt * 620 + carveAmt * 60, t, 0.1);
-          whistleGain.gain.setTargetAtTime(hiAmt * hiAmt * 0.038, t, 0.18);
+          whistleGain.gain.setTargetAtTime(hiAmt * hiAmt * 0.038 * wBoost, t, 0.18);
         }
         /* 刻滑嘶声：只在压刃转弯时响，音量随转向力度×速度联动，直滑≈0 */
         if (carveGain && carveFilter) {
@@ -2256,6 +2275,91 @@
         camera.updateProjectionMatrix();
         renderer.setSize(window.innerWidth, window.innerHeight);
       });
+
+      /* ================= 天气系统：晴雪 → 中雪 → 暴风雪 → 雾雪（第 10 项升级） =================
+         独立慢循环，与 160 秒昼夜循环相位无关、互不干扰：四档按固定顺序轮换，
+         每档停留 25–40 秒，档间 7 秒 smoothstep 平滑插值，所有参数（能见度 / 雪量 /
+         侧风 / 雪粒大小）连续变化、绝不跳变。雾色不归天气管——仍由 updateDayNight
+         按时段给出（白天冷白、黄昏暖、极光夜深蓝），天气只接管 fog 的 near/far；
+         飘雪复用既有粒子系统（drawRange 控密度），风声只调既有三层的参数。 */
+      var WEATHER_DEFS = [
+        { icon: '☀️', name: '晴雪',   vis: 250, near: 34, snow: 0.22, wind: 0.12, size: 0.88, hold: 30, toast: '☀️ 晴雪 · 能见度良好' },
+        { icon: '🌨️', name: '中雪',   vis: 150, near: 24, snow: 0.55, wind: 0.42, size: 1.00, hold: 27, toast: '🌨️ 中雪 · 雪势渐强' },
+        { icon: '❄️', name: '暴风雪', vis: 60,  near: 10, snow: 1.00, wind: 1.00, size: 1.28, hold: 32, toast: '❄️ 暴风雪来临，能见度降低' },
+        { icon: '🌫️', name: '雾雪',   vis: 90,  near: 7,  snow: 0.34, wind: 0.26, size: 0.95, hold: 28, toast: '🌫️ 雾雪弥漫，能见度低' }
+      ];
+      var WEATHER_TRANS = 7; // 档间过渡秒数（规格 6–8 秒）
+      function weatherSnap(d) { return { vis: d.vis, near: d.near, snow: d.snow, wind: d.wind, size: d.size }; }
+      var weatherIdx = 0;                       // 当前（或正在离开的）档位
+      var weatherTimer = 0;                     // 本档已停留秒数
+      var weatherTransT = -1;                   // >=0 表示正在过渡，已过渡秒数
+      var weatherFrom = weatherSnap(WEATHER_DEFS[0]);
+      var weatherTo = weatherSnap(WEATHER_DEFS[0]);
+      var weatherCur = weatherSnap(WEATHER_DEFS[0]); // 逐帧插值后的当前参数
+      var weatherWind = WEATHER_DEFS[0].wind;   // 侧风强度 0–1：雪粒漂移与风声联动读它
+      var weatherToastT = 0;
+      var hWeather = document.getElementById('hWeather'), hVis = document.getElementById('hVis');
+      var weatherToastEl = document.getElementById('weatherToast');
+      var lastWeatherLab = '', lastVisTxt = '';
+      function showWeatherToast(txt) {
+        weatherToastEl.textContent = txt;
+        weatherToastEl.classList.add('show');
+        weatherToastT = 2.2; // 约 2 秒后在 updateWeather 里淡出
+      }
+      /* 每帧推进天气时钟并应用：雾 near/far（在 updateDayNight 之后调用，覆盖其 fogFar）、
+         雾带浓度、飘雪密度/大小、HUD 天气格。雾色不动——updateDayNight 已写好 scene.fog.color */
+      function updateWeather(rdt) {
+        var dispIdx = weatherIdx;
+        if (weatherTransT >= 0) {
+          weatherTransT += rdt;
+          var tu = clamp(weatherTransT / WEATHER_TRANS, 0, 1);
+          var su = tu * tu * (3 - 2 * tu);
+          weatherCur.vis = lerp(weatherFrom.vis, weatherTo.vis, su);
+          weatherCur.near = lerp(weatherFrom.near, weatherTo.near, su);
+          weatherCur.snow = lerp(weatherFrom.snow, weatherTo.snow, su);
+          weatherCur.wind = lerp(weatherFrom.wind, weatherTo.wind, su);
+          weatherCur.size = lerp(weatherFrom.size, weatherTo.size, su);
+          dispIdx = (weatherIdx + 1) % WEATHER_DEFS.length; // 过渡期间 HUD 显示正在到来的天气
+          if (tu >= 1) {
+            weatherIdx = dispIdx; weatherTransT = -1; weatherTimer = 0;
+            weatherCur = weatherSnap(WEATHER_DEFS[weatherIdx]);
+          }
+        } else {
+          weatherTimer += rdt;
+          if (weatherTimer >= WEATHER_DEFS[weatherIdx].hold) {
+            var nxt = (weatherIdx + 1) % WEATHER_DEFS.length;
+            weatherFrom = weatherSnap(WEATHER_DEFS[weatherIdx]);
+            weatherTo = weatherSnap(WEATHER_DEFS[nxt]);
+            weatherTransT = 0;
+            showWeatherToast(WEATHER_DEFS[nxt].toast); // 切换伊始就预告新天气
+          }
+        }
+        weatherWind = weatherCur.wind;
+        /* 雾与能见度：far/near 跟天气走（晴雪 250m → 暴风雪 60m → 雾雪 90m），远山随之隐没/显现 */
+        scene.fog.far = weatherCur.vis;
+        scene.fog.near = weatherCur.near;
+        /* 雾带三层浓度随能见度收紧而变厚（opacity 已由 updateDayNight 按昼夜写好，这里只乘天气系数） */
+        var fogBoost = 1 + clamp((250 - weatherCur.vis) / 190, 0, 1) * 0.9;
+        fogBandMat.opacity *= fogBoost;
+        fogBandMatNear.opacity *= fogBoost;
+        fogBandMatFar.opacity *= fogBoost;
+        /* 飘雪复用既有粒子系统：drawRange 控可见密度、材质大小随强度略增、不透明度随雪势走 */
+        var snowCount = Math.round(SNOW_N * (0.16 + 0.84 * weatherCur.snow));
+        snowGeo.setDrawRange(0, snowCount);
+        snowMat2.size = 0.55 * weatherCur.size;
+        snowMat2.opacity = 0.62 + weatherCur.snow * 0.36;
+        /* HUD 天气格：档位名只在切换时改、能见度只在整数变化时改，避免逐帧动 DOM */
+        var d = WEATHER_DEFS[dispIdx];
+        var lab = d.icon + ' ' + d.name;
+        if (lab !== lastWeatherLab) { lastWeatherLab = lab; hWeather.textContent = lab; }
+        var visTxt = '能见度 ' + Math.round(weatherCur.vis) + 'm';
+        if (visTxt !== lastVisTxt) { lastVisTxt = visTxt; hVis.textContent = visTxt; }
+        /* 天气提示淡出计时 */
+        if (weatherToastT > 0) {
+          weatherToastT -= rdt;
+          if (weatherToastT <= 0) weatherToastEl.classList.remove('show');
+        }
+      }
 
       /* ================= 昼夜完整循环：白天 → 黄昏 → 极光夜 → 黎明 =================
          一轮 160 秒（约 2 分 40 秒），关键帧之间全程 smoothstep 插值：
@@ -2819,14 +2923,21 @@
           /* --- 昼夜完整循环（160 秒一轮：白天→黄昏→极光夜→黎明，全程平滑插值） --- */
           updateDayNight(tNow);
 
-          /* --- 飘雪：速度越快，雪花越往脸上扑（相对速度感） --- */
+          /* --- 天气系统（第 10 项）：在昼夜之后应用，雾 far/near 与雪势覆盖本帧 --- */
+          updateWeather(rawDt);
+
+          /* --- 飘雪：速度越快，雪花越往脸上扑（相对速度感）；
+                 天气联动：下落速度随雪势加快、横向漂移随侧风增强（暴风雪被侧风吹偏） --- */
           snowPts.position.set(px * 0.6, ry, pz - 20);
           var snowRush = state === 'play' ? speed * 0.55 : 0;
+          var snowFallMul = 0.7 + weatherCur.snow * 0.85;
+          var snowDrift = (0.7 + weatherWind * 5.2) * dt;
           for (var si2 = 0; si2 < SNOW_N; si2++) {
             var i3 = si2 * 3;
-            snowPos[i3 + 1] -= snowVel[si2] * dt;
-            snowPos[i3] += Math.sin(tNow * 1.3 + si2) * dt * 0.7;
+            snowPos[i3 + 1] -= snowVel[si2] * snowFallMul * dt;
+            snowPos[i3] += Math.sin(tNow * 1.3 + si2) * snowDrift + weatherWind * 3.4 * dt;
             snowPos[i3 + 2] += snowRush * dt;
+            if (snowPos[i3] > 62) snowPos[i3] -= 124; else if (snowPos[i3] < -62) snowPos[i3] += 124; // 侧风吹出侧界就从对侧绕回，雪幕不被吹空
             if (snowPos[i3 + 1] < -4 || snowPos[i3 + 2] > 55) {
               snowPos[i3 + 1] = 30 + Math.random() * 8;
               snowPos[i3] = (Math.random() - 0.5) * 110;
