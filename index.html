@@ -91,6 +91,25 @@
         box-shadow: 0 0 0 1px rgba(255, 139, 45, .55), 0 8px 22px rgba(249, 106, 13, .22);
       }
       .equipCard.sel .eqName { color: #ffb37a; }
+      /* ---------- 开始界面雪道选择（第 11 项）：四张卡横排，选中态橙色高亮，整局锁定 ---------- */
+      #startVeil .card { max-width: 680px; }
+      .rowLab { margin: 18px 0 0; font-size: 11px; letter-spacing: .3em; color: #9fc2e8; text-align: left; }
+      .trackRow { display: flex; gap: 10px; margin: 10px 0 0; }
+      .trackCard {
+        flex: 1 1 0; padding: 12px 6px 10px; border-radius: 12px; cursor: pointer;
+        border: 1.5px solid rgba(150, 195, 245, .28); background: rgba(120, 170, 230, .07);
+        color: #c3d9f2; font-family: inherit; text-align: center;
+      }
+      .trackCard .tkIcon { font-size: 25px; line-height: 1.15; }
+      .trackCard .tkName { font-size: 14.5px; font-weight: 800; color: #eef4fb; letter-spacing: .04em; margin-top: 3px; white-space: nowrap; }
+      .trackCard .tkEn { font-size: 9px; letter-spacing: .16em; color: #9fc2e8; margin-top: 2px; white-space: nowrap; }
+      .trackCard .tkDesc { font-size: 10.5px; color: #a9c4e4; margin-top: 5px; line-height: 1.5; }
+      .trackCard.sel {
+        border-color: #ff8b2d; background: rgba(255, 122, 26, .16);
+        box-shadow: 0 0 0 1px rgba(255, 139, 45, .55), 0 8px 22px rgba(249, 106, 13, .22);
+      }
+      .trackCard.sel .tkName { color: #ffb37a; }
+      #hTrack { white-space: nowrap; }
       /* 雪质提示：进入粉雪/冰面分区时在 HUD 下方亮起 */
       #zoneTag {
         position: fixed; left: 50%; top: calc(106px + env(safe-area-inset-top)); transform: translateX(-50%);
@@ -230,6 +249,15 @@
         /* 天气格加入后 HUD 共七格：竖屏允许换行居中，避免横向溢出挡雪道 */
         .hudbar { flex-wrap: wrap; justify-content: center; max-width: 97vw; }
         #weatherStat { min-width: 64px; padding-left: 6px; padding-right: 6px; }
+        #trackStat { min-width: 78px; padding-left: 6px; padding-right: 6px; }
+        /* 开始牌雪道卡改竖排：图标与名称同行、说明占满整行，四张卡 + 开始按钮一屏可达（整牌可滚） */
+        .trackRow { flex-direction: column; gap: 8px; margin-top: 8px; }
+        .rowLab { margin-top: 12px; }
+        .trackCard { display: flex; align-items: center; text-align: left; gap: 9px; padding: 8px 12px; }
+        .trackCard .tkIcon { font-size: 21px; }
+        .trackCard .tkName { margin-top: 0; font-size: 14px; }
+        .trackCard .tkEn { display: none; }
+        .trackCard .tkDesc { margin-top: 0; flex: 1 1 auto; font-size: 10.5px; }
         #weatherToast { font-size: 14px; max-width: 92vw; white-space: normal; text-align: center; }
         #muteBtn { top: calc(100px + env(safe-area-inset-top)); }
         #equipBtn { top: calc(152px + env(safe-area-inset-top)); right: 10px; }
@@ -274,6 +302,7 @@
         <div class="stat" id="bestStat"><div class="lab">最佳 BEST</div><div class="val"><span id="hBest">0</span></div></div>
         <div class="stat" id="comboStat"><div class="lab">连击 COMBO</div><div class="val" id="hCombo">×1</div><div class="cbar"><i id="comboBar"></i></div></div>
         <div class="stat"><div class="lab">时段 PHASE</div><div class="val" id="hPhase" style="font-size:15px">☀️ 白天</div></div>
+        <div class="stat" id="trackStat"><div class="lab">雪道 TRACK</div><div class="val" id="hTrack" style="font-size:15px">🌇 黄昏金顶道</div></div>
         <div class="stat" id="weatherStat"><div class="lab">天气 WEATHER</div><div class="val" id="hWeather" style="font-size:15px">☀️ 晴雪</div><div class="vis" id="hVis">能见度 250m</div></div>
       </div>
     </div>
@@ -294,7 +323,7 @@
         <p class="game-name">3 D 滑 雪 · 单 板 / 双 板</p>
         <h1 class="title">雪舞世界</h1>
         <p class="title-en">SNOW DANCE WORLD</p>
-        <p class="tagline">踩着单板或双板从雪山之巅一路舞下山，白天、黄昏、极光夜与黎明在滑行中流转。<br />压刃卷起雪雾——穿旗门、躲松树岩石，别摔！</p>
+        <p class="tagline">踩着单板或双板从雪山之巅一路舞下山，四条雪道四种光：晨光粉雪、午后冰面、黄昏金顶、极光夜滑。<br />压刃卷起雪雾——穿旗门、躲松树岩石，别摔！</p>
         <div class="howto">
           <div><span class="dot">▸</span> <b>转向</b>：按住屏幕左右按钮 / ← → 方向键 / 左右拖动</div>
           <div><span class="dot">▸</span> <b>穿旗门</b>：从红蓝旗门中间穿过，<b>+50 分</b>，门处闪光</div>
@@ -305,7 +334,7 @@
           <div><span class="dot">▸</span> <b>看雪面</b>：中央是压雪纹；更白的<b>粉雪</b>会拖慢你，偏蓝发亮的<b>冰面</b>更滑、转向迟半拍</div>
           <div><span class="dot">▸</span> <b>跳台</b>：橙旗标示的雪包跳台，冲上台顶腾空，落地按腾空时长<b>加分</b>，空中还能轻微修方向</div>
           <div><span class="dot">▸</span> <b>窄道</b>：木栅栏标示入口，两侧树墙收紧、地面有压雪车辙，稳住路线穿过去</div>
-          <div><span class="dot">▸</span> <b>昼夜流转</b>：约 2 分半走完一轮——白天、黄昏、繁星极光夜、黎明，看右上角时段牌</div>
+          <div><span class="dot">▸</span> <b>选雪道定光</b>：开局前选一条雪道，整局锁定它的时段光与基础雪质——晨光粉雪最松软、午后冰面最滑、黄昏金顶是标准雪、极光夜里旗门带微光；天气仍会自己流转</div>
           <div><span class="dot">▸</span> <b>天气流转</b>：晴雪 → 中雪 → 暴风雪 → 雾雪循环往复，雪势、侧风与能见度随之呼吸——暴风雪里雾最浓、障碍最晚才看清，看右上角天气牌</div>
           <div><span class="dot">▸</span> 速度越快视野越开、风声越尖，活得越久分越高</div>
           <div><span class="dot">▸</span> <b>换装备</b>：下方选单板 / 双板开局；滑行中按 <b>B 键</b> 或点右上角按钮随时原地切换，速度分数都不清零</div>
@@ -322,9 +351,32 @@
             <div class="eqDesc">平行转弯 · 雪杖点杖</div>
           </button>
         </div>
+        <p class="rowLab">选择雪道 · 整局锁定</p>
+        <div class="trackRow" role="group" aria-label="选择雪道">
+          <button type="button" class="trackCard" data-track="0" aria-label="选择晨光粉雪道">
+            <div class="tkIcon">🌅</div>
+            <div class="tkName">晨光粉雪道</div><div class="tkEn">DAWN POWDER</div>
+            <div class="tkDesc">清晨粉光 · 粉雪手感 · 障碍最稀疏，新手友好</div>
+          </button>
+          <button type="button" class="trackCard" data-track="1" aria-label="选择午后冰面道">
+            <div class="tkIcon">☀️</div>
+            <div class="tkName">午后冰面道</div><div class="tkEn">MIDDAY ICE</div>
+            <div class="tkDesc">正午硬光 · 冰面手感 · 障碍偏密，能见度最高</div>
+          </button>
+          <button type="button" class="trackCard sel" data-track="2" aria-label="选择黄昏金顶道">
+            <div class="tkIcon">🌇</div>
+            <div class="tkName">黄昏金顶道</div><div class="tkEn">GOLDEN PEAK</div>
+            <div class="tkDesc">金色时刻 · 标准雪质 · 障碍适中，速度感最强</div>
+          </button>
+          <button type="button" class="trackCard" data-track="3" aria-label="选择极光夜滑道">
+            <div class="tkIcon">🌌</div>
+            <div class="tkName">极光夜滑道</div><div class="tkEn">AURORA NIGHT</div>
+            <div class="tkDesc">极光月光 · 标准雪质 · 能见度低，旗门带微光</div>
+          </button>
+        </div>
         <p class="fineprint" id="startBestLine"></p>
-        <button class="bigbtn" id="startBtn">开始滑行 · 单板</button>
-        <p class="fineprint">点任意处或按空格也能开始 · 建议开声音，有风声 · M 键或右上角喇叭可静音 · v14</p>
+        <button class="bigbtn" id="startBtn">开始滑行 · 单板 · 黄昏金顶道</button>
+        <p class="fineprint">点任意处或按空格也能开始 · 建议开声音，有风声 · M 键或右上角喇叭可静音 · v15</p>
       </div>
     </div>
 
@@ -338,10 +390,11 @@
           <div class="stat"><div class="lab">分数</div><div class="val" id="rScore">0</div></div>
           <div class="stat"><div class="lab">旗门</div><div class="val" id="rGates">0</div></div>
         </div>
+        <p class="fineprint" id="overTrackLine"></p>
         <p class="fineprint" id="bestLine"></p>
         <p class="fineprint" id="todayLine"></p>
         <button class="bigbtn" id="againBtn">再滑一次</button>
-        <p class="fineprint">按空格或点任意处快速重开</p>
+        <p class="fineprint">回到开始界面，可换一条雪道再滑</p>
       </div>
     </div>
 
@@ -567,10 +620,30 @@
          0=普通压雪 1=粉雪（更白、扬雪多、轻微减速） 2=冰面（偏蓝发亮、更滑、转向迟钝） */
       var ZONE_LEN = 48;
       function segHash(s) { var h = Math.sin(s * 127.1 + 311.7) * 43758.5453; return h - Math.floor(h); }
+
+      /* ================= 雪道（第 11 项）：四条可选雪道，开始界面选定、整局锁定 =================
+         每条雪道锁定自己的：标志性时段（ph = 昼夜循环相位锚点，选道后循环暂停在该点）、
+         基础雪质（baseP/baseI：整局叠加在分区之上的粉雪/冰面手感，沿用既有分区物理与音色）、
+         分区加权（segP/segI：600m 轮换不变，只改粉雪/冰面段的哈希阈值 → 占比此长彼短）、
+         障碍密度（inTrack = 每块地形道内树数、rockKeep = 每块岩石保留数）、
+         能见度倍率（visMul/nearMul：只缩放天气给出的雾距，天气循环本身不变）、
+         雪面观感（roughMul 粗糙度倍率、snowTint 染色）。相机/宽谷/人物/计分一律不动。 */
+      var TRACKS = [
+        { icon: '🌅', name: '晨光粉雪道', ph: 0.905, baseP: 0.8, baseI: 0,    segP: 0.48, segI: 0.60, inTrack: 4, rockKeep: 2, visMul: 1.0,  nearMul: 1.0,  roughMul: 1.06, snowTint: 0,        tintAmt: 0,    gateGlow: false },
+        { icon: '☀️', name: '午后冰面道', ph: 0.02,  baseP: 0,    baseI: 0.75, segP: 0.12, segI: 0.55, inTrack: 9, rockKeep: 4, visMul: 1.18, nearMul: 1.1,  roughMul: 0.6,  snowTint: 0xd8ecff, tintAmt: 0.38, gateGlow: false },
+        { icon: '🌇', name: '黄昏金顶道', ph: 0.42,  baseP: 0,    baseI: 0,    segP: 0.30, segI: 0.54, inTrack: 7, rockKeep: 4, visMul: 1.0,  nearMul: 1.0,  roughMul: 1.0,  snowTint: 0,        tintAmt: 0,    gateGlow: false },
+        { icon: '🌌', name: '极光夜滑道', ph: 0.72,  baseP: 0,    baseI: 0,    segP: 0.30, segI: 0.54, inTrack: 9, rockKeep: 4, visMul: 0.62, nearMul: 0.7,  roughMul: 0.9,  snowTint: 0,        tintAmt: 0,    gateGlow: true }
+      ];
+      var curTrack = 2; // 默认黄昏金顶道（标准雪质、原金色时刻观感）
+      function trackDef() { return TRACKS[curTrack]; }
+      var dnFixedPh = TRACKS[curTrack].ph; // 昼夜锚点：非空时 updateDayNight 停在该相位
+      var TRACK_TINT_TMP = new THREE.Color();
+
       function segType(s) {
         if (s < 2) return 0; // 出发头两段是普通雪面，先让玩家上手
         var h = segHash(s);
-        return h < 0.30 ? 1 : (h < 0.54 ? 2 : 0);
+        var td = trackDef(); // 粉雪道粉雪段更长、冰面段更短；冰面道反之；金顶/夜滑保持标准阈值
+        return h < td.segP ? 1 : (h < td.segI ? 2 : 0);
       }
       function zoneFactors(z) {
         var dz2 = -z;
@@ -584,6 +657,7 @@
         return t === 1 ? { p: f, i: 0 } : { p: 0, i: f };
       }
       var riderZone = { p: 0, i: 0 };
+      var zoneOnly = { p: 0, i: 0 }; // 纯分区因子（不含雪道基础雪质）：雪质提示牌只认它，免得粉雪道整局常亮粉雪牌
 
       /* ================= 地形玩法轮换：跳台 / 窄道 =================
          以 600m 为一个轮换周期：150m 处一座跳台、330–430m 一段窄道；
@@ -883,7 +957,7 @@
         var clusA = cz - 15 - rnd() * 40, clusB = cz - 65 - rnd() * 40;      // 本块两个聚簇中心
         for (var i = 0; i < T_PER; i++) {
           var slot = t0 + i;
-          var inTrack = i < 7;
+          var inTrack = i < trackDef().inTrack; // 道内障碍密度按雪道走：粉雪道最稀疏、冰面/夜滑偏密、金顶标准
           var tx, tz, tries = 0;
           do {
             tz = cz - rnd() * CH_LEN + 6;
@@ -923,6 +997,7 @@
         }
         for (var j = 0; j < R_PER; j++) {
           var rslot = r0 + j;
+          if (j >= trackDef().rockKeep) { hideInst(rockIM, rslot); continue; } // 岩石密度同样按雪道走（粉雪道只留一半）
           var rz = cz - rnd() * CH_LEN + 6;
           var rx = valleyCenter(rz) + (4 + rnd() * 20) * (rnd() < 0.5 ? -1 : 1); // 岩石只落在谷底可滑区内
           if (isStart && rz > -26) { hideInst(rockIM, rslot); continue; }
@@ -1581,12 +1656,35 @@
         var cards = document.querySelectorAll('.equipCard');
         for (var c = 0; c < cards.length; c++) cards[c].classList.toggle('sel', cards[c].getAttribute('data-equip') === equip);
         var sb = document.getElementById('startBtn');
-        if (sb) sb.textContent = isSki ? '开始滑行 · 双板' : '开始滑行 · 单板';
+        if (sb) refreshStartBtn(); // 开始按钮文案 = 装备 + 当前雪道名
         if (equipBtnEl) equipBtnEl.textContent = isSki ? '双板 · 切换 ⇄' : '单板 · 切换 ⇄';
       }
       function setEquip(next) { equip = next === 'ski' ? 'ski' : 'board'; skiPolePlantT = 0; applyEquip(); }
       function toggleEquip() { setEquip(equip === 'ski' ? 'board' : 'ski'); }
       applyEquip();
+
+      /* ================= 雪道选择（第 11 项） =================
+         只在开始界面切换：卡片高亮、HUD 雪道格、开始按钮文案、昼夜锚点同步更新，
+         开始界面的背景光即时预览所选雪道的时段；开局后整局锁定，滑行中无切换入口 */
+      var hTrackEl = document.getElementById('hTrack');
+      function refreshStartBtn() {
+        var sb = document.getElementById('startBtn');
+        if (sb) sb.textContent = '开始滑行 · ' + (equip === 'ski' ? '双板' : '单板') + ' · ' + trackDef().name;
+      }
+      function setTrack(idx) {
+        curTrack = clamp(idx | 0, 0, TRACKS.length - 1);
+        var td = trackDef();
+        dnFixedPh = td.ph; // 昼夜循环锚定在该雪道的标志性时段并暂停轮换
+        var cards = document.querySelectorAll('.trackCard');
+        for (var c = 0; c < cards.length; c++) cards[c].classList.toggle('sel', Number(cards[c].getAttribute('data-track')) === curTrack);
+        if (hTrackEl) hTrackEl.textContent = td.icon + ' ' + td.name;
+        /* 夜滑道旗门微光：旗面/旗杆带一层冷色自发光，低能见度下仍能辨认旗门线（其余雪道关闭） */
+        flagIM.material.emissive.setHex(td.gateGlow ? 0x93a7cc : 0x000000);
+        flagIM.material.emissiveIntensity = td.gateGlow ? 0.5 : 1;
+        poleIM.material.emissive.setHex(td.gateGlow ? 0x54678c : 0x000000);
+        refreshStartBtn();
+      }
+      setTrack(curTrack);
 
       rider.position.set(0, groundH(0, 0), 0);
       scene.add(rider);
@@ -2014,8 +2112,8 @@
         var key = '';
         if (rampHere > 0.04 || (airGap > 0.05 && airFromJump)) key = 'jump';
         else if (narrowHere > 0.35) key = 'narrow';
-        else if (riderZone.p > 0.3) key = 'powder';
-        else if (riderZone.i > 0.3) key = 'ice';
+        else if (zoneOnly.p > 0.3) key = 'powder';
+        else if (zoneOnly.i > 0.3) key = 'ice';
         if (key === lastZoneKey) return;
         lastZoneKey = key;
         if (key === 'jump') {
@@ -2170,6 +2268,18 @@
         document.getElementById('overVeil').classList.add('hidden');
         hudEl.classList.add('on'); steerEl.classList.add('on'); muteBtn.classList.add('on'); equipBtnEl.classList.add('on');
       }
+      /* 结算后回开始界面（第 11 项动线）：世界重置回出发状态，可换雪道 / 装备再滑；
+         开始牌上的最佳成绩行同步刷新成最新存档 */
+      function backToMenu() {
+        resetWorld();
+        state = 'menu';
+        document.getElementById('overVeil').classList.add('hidden');
+        document.getElementById('startVeil').classList.remove('hidden');
+        hudEl.classList.remove('on'); steerEl.classList.remove('on'); muteBtn.classList.remove('on'); equipBtnEl.classList.remove('on');
+        if (bestScore > 0) {
+          startBestLine.textContent = '历史最佳 ' + bestScore + ' 分' + (todayBest > 0 ? ' · 今日最佳 ' + todayBest + ' 分' : '');
+        }
+      }
       function endGame(why) {
         state = 'over';
         combo = 0; comboTimer = 0; slowmoT = 0; updateComboHUD(false); // 撞毁：连击清零、慢动作立即退出
@@ -2191,6 +2301,7 @@
         document.getElementById('rDist').textContent = Math.floor(distance) + ' m';
         document.getElementById('rScore').textContent = fs;
         document.getElementById('rGates').textContent = gatesPassed;
+        document.getElementById('overTrackLine').textContent = '本次雪道：' + trackDef().icon + ' ' + trackDef().name;
         /* 成绩落盘：破历史最佳 / 破今日最佳分别判定（今日最佳 ≤ 历史最佳，
            所以破历史必然同破今日，提示以历史为准） */
         var brokeBest = fs > bestScore && fs > 0;
@@ -2218,12 +2329,20 @@
           setEquip(this.getAttribute('data-equip'));
         });
       }
+      /* 雪道选择卡片：点选只换雪道、不触发开始（stopPropagation 挡住遮罩的点击开始） */
+      var trackCards = document.querySelectorAll('.trackCard');
+      for (var tci = 0; tci < trackCards.length; tci++) {
+        trackCards[tci].addEventListener('click', function (e) {
+          e.stopPropagation();
+          setTrack(Number(this.getAttribute('data-track')));
+        });
+      }
       /* HUD 装备切换按钮：滑行中原地换装备（与 B 键同效） */
       equipBtnEl.addEventListener('click', function (e) { e.stopPropagation(); initAudio(); toggleEquip(); });
       document.getElementById('startBtn').addEventListener('click', function (e) { e.stopPropagation(); startGame(); });
-      document.getElementById('againBtn').addEventListener('click', function (e) { e.stopPropagation(); startGame(); });
+      document.getElementById('againBtn').addEventListener('click', function (e) { e.stopPropagation(); backToMenu(); });
       document.getElementById('startVeil').addEventListener('click', function () { if (state === 'menu') startGame(); });
-      document.getElementById('overVeil').addEventListener('click', function () { if (state === 'over' && crashTimer < 0) startGame(); }); // 结算后点任意处重开（按钮自己 stopPropagation，不会双触发）
+      document.getElementById('overVeil').addEventListener('click', function () { if (state === 'over' && crashTimer < 0) backToMenu(); }); // 结算后点任意处回开始界面换道（按钮自己 stopPropagation，不会双触发）
       muteBtn.textContent = muted ? '🔇' : '🔊';
       function setMuted(v) {
         muted = v;
@@ -2242,7 +2361,7 @@
         if (e.code === 'ArrowRight' || e.code === 'KeyD') { keys.r = true; e.preventDefault(); }
         if (e.code === 'Space' || e.code === 'Enter') {
           if (state === 'menu') startGame();
-          else if (state === 'over' && crashTimer < 0) startGame();
+          else if (state === 'over' && crashTimer < 0) backToMenu();
           e.preventDefault();
         }
       });
@@ -2335,11 +2454,13 @@
           }
         }
         weatherWind = weatherCur.wind;
-        /* 雾与能见度：far/near 跟天气走（晴雪 250m → 暴风雪 60m → 雾雪 90m），远山随之隐没/显现 */
-        scene.fog.far = weatherCur.vis;
-        scene.fog.near = weatherCur.near;
+        /* 雾与能见度：far/near 跟天气走（晴雪 250m → 暴风雪 60m → 雾雪 90m），远山随之隐没/显现；
+           雪道倍率（第 11 项）只缩放距离：夜滑道雾效收紧、远山隐没，冰面道能见度最高，天气档位与循环不变 */
+        var visEff = weatherCur.vis * trackDef().visMul;
+        scene.fog.far = visEff;
+        scene.fog.near = weatherCur.near * trackDef().nearMul;
         /* 雾带三层浓度随能见度收紧而变厚（opacity 已由 updateDayNight 按昼夜写好，这里只乘天气系数） */
-        var fogBoost = 1 + clamp((250 - weatherCur.vis) / 190, 0, 1) * 0.9;
+        var fogBoost = 1 + clamp((250 - visEff) / 190, 0, 1) * 0.9;
         fogBandMat.opacity *= fogBoost;
         fogBandMatNear.opacity *= fogBoost;
         fogBandMatFar.opacity *= fogBoost;
@@ -2352,7 +2473,7 @@
         var d = WEATHER_DEFS[dispIdx];
         var lab = d.icon + ' ' + d.name;
         if (lab !== lastWeatherLab) { lastWeatherLab = lab; hWeather.textContent = lab; }
-        var visTxt = '能见度 ' + Math.round(weatherCur.vis) + 'm';
+        var visTxt = '能见度 ' + Math.round(visEff) + 'm';
         if (visTxt !== lastVisTxt) { lastVisTxt = visTxt; hVis.textContent = visTxt; }
         /* 天气提示淡出计时 */
         if (weatherToastT > 0) {
@@ -2399,7 +2520,9 @@
       var DN_FARS_W = new THREE.Color(0xe6ddc9), DN_FARS_N = new THREE.Color(0x53637f);
       var lastPhaseLab = '';
       function updateDayNight(tNow) {
-        var ph = (tNow % DN_T) / DN_T;
+        /* 雪道锚点（第 11 项）：选道后昼夜循环停在该雪道的标志性相位、整局不轮换；
+           天气系统不受影响、继续独立循环。dnFixedPh 为空时才是原来的 160 秒完整循环 */
+        var ph = dnFixedPh !== null ? dnFixedPh : (tNow % DN_T) / DN_T;
         var n = DN_KEYS.length, i = 0;
         while (i < n - 1 && ph >= DN_KEYS[i + 1].p) i++;
         var a = DN_KEYS[i], b = DN_KEYS[(i + 1) % n];
@@ -2445,9 +2568,12 @@
         sunSprite.material.opacity = 0.78 + ENV.glowAmt * 0.18;
         var dsc = 300 * ENV.disc;
         sunSprite.scale.set(dsc, dsc, 1);
-        /* 雪面：夜里粗糙度压低，月光在雪面拉出反光；雪色微染冷蓝；冰面高光转冷月色 */
-        snowMat.roughness = ENV.rough;
+        /* 雪面：夜里粗糙度压低，月光在雪面拉出反光；雪色微染冷蓝；冰面高光转冷月色。
+           雪道观感（第 11 项）：冰面道整局粗糙度再压低、雪色偏蓝发亮；粉雪道更粗更白蓬松 */
+        var tdSnow = trackDef();
+        snowMat.roughness = clamp(ENV.rough * tdSnow.roughMul, 0.35, 1);
         snowMat.color.copy(DN_WHITE).lerp(DN_SNOWCOOL, ENV.night * 0.5);
+        if (tdSnow.snowTint) snowMat.color.lerp(TRACK_TINT_TMP.setHex(tdSnow.snowTint), tdSnow.tintAmt);
         icePatchMat.specular.lerpColors(DN_ICE_W, DN_ICE_C, ENV.night);
         glitMat.color.copy(ENV.glowC).lerp(DN_WHITE, 0.25);
         sprayMat.color.lerpColors(DN_SPRAY_W, DN_SPRAY_C, ENV.night * 0.85);
@@ -2521,7 +2647,13 @@
               if (comboTimer <= 0) { combo = 0; comboTimer = 0; updateComboHUD(false); }
             }
             /* 雪质手感：粉雪拖住板（轻微减速）；冰面更滑（轻微加速）且转向迟钝半拍 */
-            riderZone = zoneFactors(pz);
+            /* 雪质手感：分区因子叠上雪道基础雪质（粉雪道整局松软、冰面道整局打滑，
+               分区仍可盖过基础——粉雪道滑进冰面段照样是冰面手感，反之亦然） */
+            var zfNow = zoneFactors(pz);
+            var tdNow = trackDef();
+            zoneOnly.p = zfNow.p; zoneOnly.i = zfNow.i;
+            riderZone.p = Math.max(zfNow.p, tdNow.baseP * (1 - zfNow.i));
+            riderZone.i = Math.max(zfNow.i, tdNow.baseI * (1 - zfNow.p));
             narrowHere = narrowFactorD(-pz);
             var maxSpeed = Math.min(31, 24 + elapsed * 0.12) + riderZone.i * 2.5 - riderZone.p * 3; // 粉雪封顶更低、冰面封顶更高
             updateZoneTag(); // 进入/离开分区当帧切换提示牌
