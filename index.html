@@ -109,6 +109,23 @@
         box-shadow: 0 0 0 1px rgba(255, 139, 45, .55), 0 8px 22px rgba(249, 106, 13, .22);
       }
       .trackCard.sel .tkName { color: #ffb37a; }
+      /* ---------- 开始界面人物与装备搭配（第 12 项）：紧凑三行，点选即时高亮 ---------- */
+      .outfitBox { margin: 10px 0 0; display: flex; flex-direction: column; gap: 7px; text-align: left; }
+      .ofRow { display: flex; align-items: center; gap: 9px; }
+      .ofLab { flex: none; width: 58px; font-size: 11.5px; letter-spacing: .12em; color: #9fc2e8; }
+      .ofChips { display: flex; gap: 7px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding: 2px; }
+      .ofChips::-webkit-scrollbar { display: none; }
+      .swatch {
+        flex: none; width: 26px; height: 26px; border-radius: 50%; padding: 0; cursor: pointer;
+        border: 2px solid rgba(220, 238, 255, .3); background: var(--c); font-family: inherit;
+      }
+      .swatch.sel { border-color: #ffb37a; box-shadow: 0 0 0 2px rgba(255, 139, 45, .85); }
+      .chip {
+        flex: none; padding: 5px 11px; border-radius: 999px; cursor: pointer; white-space: nowrap;
+        border: 1.5px solid rgba(150, 195, 245, .28); background: rgba(120, 170, 230, .07);
+        color: #c3d9f2; font-size: 12px; font-family: inherit;
+      }
+      .chip.sel { border-color: #ff8b2d; background: rgba(255, 122, 26, .16); color: #ffb37a; font-weight: 700; }
       #hTrack { white-space: nowrap; }
       /* 雪质提示：进入粉雪/冰面分区时在 HUD 下方亮起 */
       #zoneTag {
@@ -270,6 +287,10 @@
         .equipCard { min-height: 88px; padding: 9px 6px 8px; }
         .equipCard svg { margin-bottom: 3px; }
         .equipCard .eqDesc { font-size: 10.5px; margin-top: 3px; }
+        .outfitBox { margin-top: 8px; gap: 6px; }
+        .ofLab { width: 52px; font-size: 11px; }
+        .swatch { width: 24px; height: 24px; }
+        .chip { padding: 4px 9px; font-size: 11.5px; }
         .bigbtn { margin-top: 14px; min-height: 50px; }
         .fineprint { margin-top: 8px; }
       }
@@ -338,6 +359,8 @@
           <div><span class="dot">▸</span> <b>天气流转</b>：晴雪 → 中雪 → 暴风雪 → 雾雪循环往复，雪势、侧风与能见度随之呼吸——暴风雪里雾最浓、障碍最晚才看清，看右上角天气牌</div>
           <div><span class="dot">▸</span> 速度越快视野越开、风声越尖，活得越久分越高</div>
           <div><span class="dot">▸</span> <b>换装备</b>：下方选单板 / 双板开局；滑行中按 <b>B 键</b> 或点右上角按钮随时原地切换，速度分数都不清零</div>
+          <div><span class="dot">▸</span> <b>搭配</b>：下方可换雪服颜色、板面图案与头盔雪镜，点选即时换上、自动记住</div>
+          <div><span class="dot">▸</span> <b>路上有人</b>：会遇上其他单板客与滑雪者，贴身掠过只有一阵风声——不撞人、不计分，专心你的线</div>
         </div>
         <div class="equipRow" role="group" aria-label="选择装备">
           <button type="button" class="equipCard sel" data-equip="board" aria-label="选择单板">
@@ -350,6 +373,27 @@
             <div class="eqName">双板</div><div class="eqEn">SKI</div>
             <div class="eqDesc">平行转弯 · 雪杖点杖</div>
           </button>
+        </div>
+        <p class="rowLab">人物与装备 · 搭配</p>
+        <div class="outfitBox">
+          <div class="ofRow"><span class="ofLab">雪服颜色</span><div class="ofChips" id="jacketChips" role="group" aria-label="雪服颜色">
+            <button type="button" class="swatch sel" data-jacket="0" style="--c:#f96a0d" aria-label="橙色雪服"></button>
+            <button type="button" class="swatch" data-jacket="1" style="--c:#d63a24" aria-label="红色雪服"></button>
+            <button type="button" class="swatch" data-jacket="2" style="--c:#1f66c4" aria-label="蓝色雪服"></button>
+            <button type="button" class="swatch" data-jacket="3" style="--c:#239350" aria-label="绿色雪服"></button>
+            <button type="button" class="swatch" data-jacket="4" style="--c:#7439bc" aria-label="紫色雪服"></button>
+            <button type="button" class="swatch" data-jacket="5" style="--c:#2b2f36" aria-label="黑色雪服"></button>
+          </div></div>
+          <div class="ofRow"><span class="ofLab">板面图案</span><div class="ofChips" id="boardChips" role="group" aria-label="板面图案">
+            <button type="button" class="chip sel" data-board="0">火焰纹</button>
+            <button type="button" class="chip" data-board="1">几何箭纹</button>
+            <button type="button" class="chip" data-board="2">纯色</button>
+          </div></div>
+          <div class="ofRow"><span class="ofLab">头盔雪镜</span><div class="ofChips" id="helmChips" role="group" aria-label="头盔雪镜组合">
+            <button type="button" class="chip sel" data-helm="0">深盔 · 暖镜</button>
+            <button type="button" class="chip" data-helm="1">白盔 · 蓝镜</button>
+            <button type="button" class="chip" data-helm="2">黑盔 · 金镜</button>
+          </div></div>
         </div>
         <p class="rowLab">选择雪道 · 整局锁定</p>
         <div class="trackRow" role="group" aria-label="选择雪道">
@@ -375,8 +419,8 @@
           </button>
         </div>
         <p class="fineprint" id="startBestLine"></p>
-        <button class="bigbtn" id="startBtn">开始滑行 · 单板 · 黄昏金顶道</button>
-        <p class="fineprint">点任意处或按空格也能开始 · 建议开声音，有风声 · M 键或右上角喇叭可静音 · v15</p>
+        <button class="bigbtn" id="startBtn">开始滑行 · 单板 · 橙 · 黄昏金顶道</button>
+        <p class="fineprint">点任意处或按空格也能开始 · 建议开声音，有风声 · M 键或右上角喇叭可静音 · v16</p>
       </div>
     </div>
 
@@ -1315,24 +1359,53 @@
         draw(c.getContext('2d'), w, h);
         var t = new THREE.CanvasTexture(c); t.anisotropy = 4; return t;
       }
-      /* 雪服：橙色基底 + 深浅拼块 + 褶皱阴影线 + 拉链/胸袋/反光条，不再是纯色平板 */
-      var jacketTex = riderTexture(256, 256, function (g) {
+      /* ================= 人物与装备搭配（第 12 项） =================
+         雪服六色 / 板面三图案 / 头盔雪镜三组合：只改主角外观主色与板面，
+         雪裤、头盔形制、手套、固定器一律不动；选择存 localStorage，下次打开沿用。
+         默认仍是原来的橙色雪服 + 火焰纹板面 + 深盔暖镜 */
+      var JACKETS = [
+        { name: '橙', top: '#ff7d26', mid: '#f96a0d', bot: '#da5005', side: 'rgba(186,62,4,0.55)',  hi: 'rgba(255,172,92,0.45)',  wr: 'rgba(158,46,0,0.5)',  deep: 'rgba(120,36,0,0.7)',  shade: 'rgba(120,36,0,0.5)' },
+        { name: '红', top: '#ec5240', mid: '#d63a24', bot: '#a82a16', side: 'rgba(122,22,10,0.55)', hi: 'rgba(255,158,128,0.45)', wr: 'rgba(112,20,8,0.5)',  deep: 'rgba(92,16,6,0.7)',   shade: 'rgba(92,16,6,0.5)' },
+        { name: '蓝', top: '#3f8fe8', mid: '#1f66c4', bot: '#174c94', side: 'rgba(10,42,96,0.55)',  hi: 'rgba(150,198,255,0.45)', wr: 'rgba(10,38,88,0.5)',  deep: 'rgba(8,30,70,0.7)',   shade: 'rgba(8,30,70,0.5)' },
+        { name: '绿', top: '#3cb96c', mid: '#239350', bot: '#176b39', side: 'rgba(8,62,32,0.55)',   hi: 'rgba(158,238,186,0.45)', wr: 'rgba(8,56,28,0.5)',   deep: 'rgba(6,44,22,0.7)',   shade: 'rgba(6,44,22,0.5)' },
+        { name: '紫', top: '#9a5fe0', mid: '#7439bc', bot: '#552891', side: 'rgba(44,13,82,0.55)',  hi: 'rgba(208,170,255,0.45)', wr: 'rgba(40,11,74,0.5)',  deep: 'rgba(32,9,60,0.7)',   shade: 'rgba(32,9,60,0.5)' },
+        { name: '黑', top: '#41464f', mid: '#2b2f36', bot: '#1b1e23', side: 'rgba(0,0,0,0.6)',      hi: 'rgba(205,215,228,0.32)', wr: 'rgba(0,0,0,0.55)',    deep: 'rgba(0,0,0,0.75)',    shade: 'rgba(0,0,0,0.55)' }
+      ];
+      var HELMETS = [
+        { helmet: 0x23272e, goggle: 0xff8b2d, emis: 0x8a3800 }, // 深色头盔 + 暖色反光雪镜（默认）
+        { helmet: 0xe9edf2, goggle: 0x2f7fe0, emis: 0x0a2c66 }, // 白色头盔 + 蓝色雪镜
+        { helmet: 0x0b0c0f, goggle: 0xffc233, emis: 0x7a5200 }  // 黑色头盔 + 金色雪镜
+      ];
+      var OUTFIT_KEY = 'snow-dance-outfit';
+      var outfit = { jacket: 0, board: 0, helm: 0 };
+      try {
+        var outfitSaved = JSON.parse(window.localStorage.getItem(OUTFIT_KEY) || 'null');
+        if (outfitSaved) {
+          outfit.jacket = clamp(outfitSaved.jacket | 0, 0, JACKETS.length - 1);
+          outfit.board = clamp(outfitSaved.board | 0, 0, 2);
+          outfit.helm = clamp(outfitSaved.helm | 0, 0, HELMETS.length - 1);
+        }
+      } catch (e) { /* 存不下就用默认搭配 */ }
+      /* 雪服：所选主色基底 + 深浅拼块 + 褶皱阴影线 + 拉链/胸袋/反光条，不再是纯色平板 */
+      function drawJacket(g, P) {
         var grad = g.createLinearGradient(0, 0, 0, 256);
-        grad.addColorStop(0, '#ff7d26'); grad.addColorStop(0.55, '#f96a0d'); grad.addColorStop(1, '#da5005');
+        grad.addColorStop(0, P.top); grad.addColorStop(0.55, P.mid); grad.addColorStop(1, P.bot);
         g.fillStyle = grad; g.fillRect(0, 0, 256, 256);
-        g.fillStyle = 'rgba(186,62,4,0.55)'; g.fillRect(0, 0, 34, 256); g.fillRect(222, 0, 34, 256); // 两侧深色拼块
-        g.fillStyle = 'rgba(255,172,92,0.45)'; g.fillRect(98, 0, 24, 256); // 高光带
-        g.strokeStyle = 'rgba(158,46,0,0.5)'; g.lineWidth = 3;
+        g.fillStyle = P.side; g.fillRect(0, 0, 34, 256); g.fillRect(222, 0, 34, 256); // 两侧深色拼块
+        g.fillStyle = P.hi; g.fillRect(98, 0, 24, 256); // 高光带
+        g.strokeStyle = P.wr; g.lineWidth = 3;
         for (var i = 0; i < 9; i++) { // 褶皱：不规则弧线阴影
           var y0 = 24 + i * 26 + (i % 3) * 5;
           g.beginPath(); g.moveTo(22 + (i * 37) % 56, y0);
           g.quadraticCurveTo(128, y0 + 13 + (i % 2) * 8, 234 - (i * 29) % 48, y0 - 4); g.stroke();
         }
         g.fillStyle = 'rgba(38,24,18,0.85)'; g.fillRect(124, 0, 7, 256); // 前拉链
-        g.strokeStyle = 'rgba(120,36,0,0.7)'; g.lineWidth = 2.5; g.strokeRect(152, 88, 58, 30); // 胸袋轮廓
+        g.strokeStyle = P.deep; g.lineWidth = 2.5; g.strokeRect(152, 88, 58, 30); // 胸袋轮廓
         g.fillStyle = 'rgba(245,248,250,0.8)'; g.fillRect(152, 98, 58, 9); // 反光条
-        g.fillStyle = 'rgba(120,36,0,0.5)'; g.fillRect(0, 230, 256, 26); // 下摆阴影
-      });
+        g.fillStyle = P.shade; g.fillRect(0, 230, 256, 26); // 下摆阴影
+      }
+      var jacketTexs = JACKETS.map(function (P) { return riderTexture(256, 256, function (g) { drawJacket(g, P); }); });
+      var jacketTex = jacketTexs[outfit.jacket];
       /* 雪裤：深藏蓝 + 布纹竖纹 + 膝部阴影带 */
       var pantsTex = riderTexture(128, 128, function (g) {
         g.fillStyle = '#26334d'; g.fillRect(0, 0, 128, 128);
@@ -1342,16 +1415,20 @@
         g.strokeStyle = 'rgba(8,12,22,0.4)'; g.lineWidth = 2;
         for (var j = 0; j < 4; j++) { g.beginPath(); g.moveTo(0, 26 + j * 28); g.lineTo(128, 20 + j * 28); g.stroke(); }
       });
-      /* 板面：深底 + 橙红火焰纹（从板尾烧向板头）+ 板头几何箭纹，后方跟随视角一眼可辨 */
-      var boardTex = riderTexture(128, 512, function (g) {
+      /* 板面三图案（第 12 项）：火焰纹（默认）/ 几何箭纹 / 纯色——深底 + 两侧亮边线三款共用，
+         双板模式下两支板的贴面同步换（材质都登记在 boardTopMats 里统一切换） */
+      function drawBoardBase(g) {
         g.fillStyle = '#0d2733'; g.fillRect(0, 0, 128, 512);
         g.fillStyle = '#12b5c9'; g.fillRect(0, 0, 9, 512); g.fillRect(119, 0, 9, 512); // 两侧亮边线
+      }
+      function drawBoardChevron(g, ay) {
+        g.beginPath(); g.moveTo(16, ay + 16); g.lineTo(64, ay); g.lineTo(112, ay + 16);
+        g.lineTo(112, ay + 27); g.lineTo(64, ay + 11); g.lineTo(16, ay + 27); g.closePath(); g.fill();
+      }
+      var boardTexFlame = riderTexture(128, 512, function (g) {
+        drawBoardBase(g);
         g.fillStyle = 'rgba(240,248,255,0.92)';
-        for (var i = 0; i < 4; i++) { // 板头几何箭纹（画布顶部 = 板头方向）
-          var ay = 26 + i * 27;
-          g.beginPath(); g.moveTo(16, ay + 16); g.lineTo(64, ay); g.lineTo(112, ay + 16);
-          g.lineTo(112, ay + 27); g.lineTo(64, ay + 11); g.lineTo(16, ay + 27); g.closePath(); g.fill();
-        }
+        for (var i = 0; i < 4; i++) drawBoardChevron(g, 26 + i * 27); // 板头几何箭纹（画布顶部 = 板头方向）
         function flame(cx, baseY, len, wdt, col) {
           g.fillStyle = col; g.beginPath();
           g.moveTo(cx - wdt, baseY);
@@ -1367,6 +1444,18 @@
         flame(102, 470, 120, 11, '#ff7a1a');
         g.fillStyle = 'rgba(255,255,255,0.85)'; g.fillRect(44, 486, 40, 6);
       });
+      var boardTexArrow = riderTexture(128, 512, function (g) {
+        drawBoardBase(g);
+        g.fillStyle = 'rgba(240,248,255,0.92)';
+        for (var i = 0; i < 7; i++) drawBoardChevron(g, 24 + i * 68); // 箭纹贯穿全板
+        g.fillStyle = 'rgba(255,255,255,0.85)'; g.fillRect(44, 486, 40, 6);
+      });
+      var boardTexPlain = riderTexture(128, 512, function (g) {
+        drawBoardBase(g);
+        g.fillStyle = 'rgba(240,248,255,0.32)'; g.fillRect(60, 0, 8, 512); // 中央一条细线，其余纯色
+      });
+      var boardTexs = [boardTexFlame, boardTexArrow, boardTexPlain];
+      var boardTex = boardTexs[outfit.board];
       var jacketMat = new THREE.MeshStandardMaterial({ map: jacketTex, roughness: 0.62 });
       var pantsMat = new THREE.MeshStandardMaterial({ map: pantsTex, roughness: 0.78 });
       var skinMat = new THREE.MeshStandardMaterial({ color: 0xe8b58e, roughness: 0.6 });
@@ -1390,8 +1479,10 @@
       var boardG = new THREE.Group(); rider.add(boardG);
       var boardMat = new THREE.MeshStandardMaterial({ color: 0x0d2733, roughness: 0.38 });
       part(new THREE.BoxGeometry(0.34, 0.045, 1.5), boardMat, 0, 0.06, 0, boardG);
-      var topSheet = new THREE.Mesh(new THREE.PlaneGeometry(0.315, 1.46),
-        new THREE.MeshStandardMaterial({ map: boardTex, roughness: 0.3 }));
+      var boardTopMats = []; // 主角全部板面材质（单板 1 张 + 双板 2 张），换图案时统一换贴图
+      var topMat = new THREE.MeshStandardMaterial({ map: boardTexs[outfit.board], roughness: 0.3 });
+      boardTopMats.push(topMat);
+      var topSheet = new THREE.Mesh(new THREE.PlaneGeometry(0.315, 1.46), topMat);
       topSheet.rotation.x = -Math.PI / 2; topSheet.position.set(0, 0.086, 0); topSheet.receiveShadow = true;
       boardG.add(topSheet);
       var nose = part(new THREE.BoxGeometry(0.34, 0.04, 0.26), accentMat, 0, 0.1, -0.85, boardG);
@@ -1501,8 +1592,9 @@
       [-1, 1].forEach(function (s) {
         var sg = new THREE.Group(); sg.position.x = s * 0.17; skiBoardG.add(sg); skiSideGs.push({ s: s, g: sg });
         part(new THREE.BoxGeometry(0.115, 0.04, 1.62), skiBaseMat, 0, 0.055, 0, sg); // 板身：沿 -Z，与另一支平行
-        var sTop = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 1.58),
-          new THREE.MeshStandardMaterial({ map: boardTex, roughness: 0.3 }));
+        var sTopMat = new THREE.MeshStandardMaterial({ map: boardTexs[outfit.board], roughness: 0.3 });
+        boardTopMats.push(sTopMat);
+        var sTop = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 1.58), sTopMat);
         sTop.rotation.x = -Math.PI / 2; sTop.position.set(0, 0.078, 0); sTop.receiveShadow = true; sg.add(sTop);
         var sTip = part(new THREE.BoxGeometry(0.115, 0.035, 0.26), accentMat, 0, 0.095, -0.9, sg); sTip.rotation.x = -0.5; // 板头上翘
         var sTail = part(new THREE.BoxGeometry(0.115, 0.035, 0.15), accentMat, 0, 0.08, 0.86, sg); sTail.rotation.x = 0.34;
@@ -1663,13 +1755,36 @@
       function toggleEquip() { setEquip(equip === 'ski' ? 'board' : 'ski'); }
       applyEquip();
 
+      /* ================= 搭配应用（第 12 项）：换雪服贴图 / 板面贴图 / 头盔雪镜色 =================
+         点选即时生效：菜单里主角就站在雪道上，换装立刻看得见；选择同步存档并刷新开始按钮文案 */
+      function markOutfitChips() {
+        var sw = document.querySelectorAll('#jacketChips .swatch');
+        for (var i = 0; i < sw.length; i++) sw[i].classList.toggle('sel', Number(sw[i].getAttribute('data-jacket')) === outfit.jacket);
+        var bc = document.querySelectorAll('#boardChips .chip');
+        for (var j = 0; j < bc.length; j++) bc[j].classList.toggle('sel', Number(bc[j].getAttribute('data-board')) === outfit.board);
+        var hc = document.querySelectorAll('#helmChips .chip');
+        for (var k = 0; k < hc.length; k++) hc[k].classList.toggle('sel', Number(hc[k].getAttribute('data-helm')) === outfit.helm);
+      }
+      function applyOutfit() {
+        jacketMat.map = jacketTexs[outfit.jacket]; jacketMat.needsUpdate = true; // 单板/双板共用同一件雪服
+        for (var i = 0; i < boardTopMats.length; i++) { boardTopMats[i].map = boardTexs[outfit.board]; boardTopMats[i].needsUpdate = true; }
+        var hd = HELMETS[outfit.helm];
+        helmetMat.color.setHex(hd.helmet);
+        goggleMat.color.setHex(hd.goggle);
+        goggleMat.emissive.setHex(hd.emis);
+        markOutfitChips();
+        try { window.localStorage.setItem(OUTFIT_KEY, JSON.stringify(outfit)); } catch (e) { /* 存不下就只记本次 */ }
+        refreshStartBtn();
+      }
+      applyOutfit();
+
       /* ================= 雪道选择（第 11 项） =================
          只在开始界面切换：卡片高亮、HUD 雪道格、开始按钮文案、昼夜锚点同步更新，
          开始界面的背景光即时预览所选雪道的时段；开局后整局锁定，滑行中无切换入口 */
       var hTrackEl = document.getElementById('hTrack');
       function refreshStartBtn() {
         var sb = document.getElementById('startBtn');
-        if (sb) sb.textContent = '开始滑行 · ' + (equip === 'ski' ? '双板' : '单板') + ' · ' + trackDef().name;
+        if (sb) sb.textContent = '开始滑行 · ' + (equip === 'ski' ? '双板' : '单板') + ' · ' + JACKETS[outfit.jacket].name + ' · ' + trackDef().name;
       }
       function setTrack(idx) {
         curTrack = clamp(idx | 0, 0, TRACKS.length - 1);
@@ -1688,6 +1803,163 @@
 
       rider.position.set(0, groundH(0, 0), 0);
       scene.add(rider);
+
+      /* ================= 路人：其他滑雪者 / 单板客（第 12 项） =================
+         纯氛围：与主角同向下行、速度略慢可被超车，不碰撞、不计分、不触发结算；
+         前方 60–150m 生成（雾天按能见度收近），约每 150–250m 遇上 1–2 名，
+         滑出视野后回收进池复用。配色低饱和、体量略小于主角（0.92），主角永远是
+         唯一视觉焦点；材质全是标准材质，吃同一套场景光与雾，夜里雪服反光条微亮。
+         姿态是主角动作语言的简化版：屈膝起伏、压刃倾身、手臂平衡、双板交替点杖 */
+      var npcReflMat = new THREE.MeshStandardMaterial({ color: 0xd7dee6, roughness: 0.35, metalness: 0.2, emissive: 0xbdd2ff, emissiveIntensity: 0 });
+      var npcArrowTex = riderTexture(128, 512, function (g) { // 路人板面：浅底简单箭纹（乘上板色即成低饱和几何纹）
+        g.fillStyle = '#e8edf2'; g.fillRect(0, 0, 128, 512);
+        g.fillStyle = 'rgba(70,90,110,0.5)';
+        for (var i = 0; i < 6; i++) drawBoardChevron(g, 30 + i * 78);
+      });
+      var NPC_JACKETS = [0x5b7186, 0x46594d, 0x6e4450, 0x8f979e, 0x59536b, 0x6f6455]; // 灰蓝 / 墨绿 / 酒红 / 灰白 / 灰紫 / 土灰
+      var NPC_BOARDS = [0x37505e, 0x4e4438, 0x51445a, 0x3c5548];
+      var NPC_HELMETS = [0x3a4048, 0xc9ced4, 0x22252a];
+      var _LA = new THREE.Vector3(), _LB = new THREE.Vector3(), _LD = new THREE.Vector3();
+      function limbBetween(parent, from, to, r, mat) { // 两点之间放一根圆柱（路人静态骨骼用，不走 IK）
+        _LA.set(from[0], from[1], from[2]); _LB.set(to[0], to[1], to[2]);
+        _LD.subVectors(_LB, _LA);
+        var len = _LD.length();
+        var m = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.82, r, len, 6), mat);
+        m.position.copy(_LA).addScaledVector(_LD, 0.5);
+        m.quaternion.setFromUnitVectors(_DOWN, _LD.normalize());
+        m.castShadow = true; parent.add(m); return m;
+      }
+      function buildNpcFigure(kind, vi) {
+        var g = new THREE.Group();
+        var jMat = new THREE.MeshStandardMaterial({ color: NPC_JACKETS[vi % NPC_JACKETS.length], roughness: 0.78 });
+        var bMat = new THREE.MeshStandardMaterial({ color: NPC_BOARDS[(vi + 1) % NPC_BOARDS.length], roughness: 0.45 });
+        var hMat = new THREE.MeshStandardMaterial({ color: NPC_HELMETS[vi % NPC_HELMETS.length], roughness: 0.8 });
+        var gogMat = new THREE.MeshStandardMaterial({ color: 0x36434f, roughness: 0.25, metalness: 0.6 });
+        var bodyG = new THREE.Group(); g.add(bodyG);
+        var armGs = [], poleGs = [];
+        if (kind === 'board') {
+          /* 单板客：侧身站姿（正面朝 +X），双脚前后绑在板上 */
+          var bg = new THREE.Group(); g.add(bg);
+          part(new THREE.BoxGeometry(0.33, 0.045, 1.46), bMat, 0, 0.055, 0, bg);
+          var tp = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 1.4),
+            new THREE.MeshStandardMaterial({ map: vi % 2 ? npcArrowTex : null, color: NPC_BOARDS[(vi + 1) % NPC_BOARDS.length], roughness: 0.4 }));
+          tp.rotation.x = -Math.PI / 2; tp.position.set(0, 0.08, 0); bg.add(tp);
+          [-0.3, 0.3].forEach(function (bz) {
+            part(new THREE.BoxGeometry(0.19, 0.16, 0.29), bootMat, 0.01, 0.17, bz, bg); // 雪靴
+          });
+          [-1, 1].forEach(function (s) { // 腿：屈膝侧身（静态两段骨，膝盖朝 +X）
+            limbBetween(g, [0, 0.97, s * 0.16], [0.24, 0.6, s * 0.24], 0.085, pantsMat);
+            limbBetween(g, [0.24, 0.6, s * 0.24], [0.02, 0.27, s * 0.3], 0.062, pantsMat);
+          });
+          part(new THREE.BoxGeometry(0.3, 0.2, 0.46), pantsMat, 0, 0.99, 0, bodyG); // 髋部
+          var tg = new THREE.Group(); tg.position.set(0, 1.04, 0); bodyG.add(tg);
+          part(new THREE.BoxGeometry(0.28, 0.6, 0.5), jMat, 0.02, 0.32, 0, tg); // 躯干
+          part(new THREE.BoxGeometry(0.3, 0.05, 0.52), npcReflMat, 0.02, 0.44, 0, tg); // 反光条带（夜里发亮）
+          var hg = new THREE.Group(); hg.position.set(0.03, 0.8, 0); tg.add(hg);
+          part(new THREE.SphereGeometry(0.135, 10, 8), skinMat, 0, 0, 0, hg);
+          part(new THREE.SphereGeometry(0.152, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.58), hMat, 0, 0.018, 0, hg);
+          part(new THREE.BoxGeometry(0.09, 0.075, 0.24), gogMat, 0.1, 0.005, 0, hg); // 雪镜（朝 +X）
+          [-1, 1].forEach(function (s) { // 手臂：肩组留给主循环小幅摆动做平衡
+            var sh = new THREE.Group(); sh.position.set(0.03, 0.52, s * 0.29); tg.add(sh);
+            limbBetween(sh, [0, 0, 0], [0.1, -0.3, s * 0.1], 0.055, jMat);
+            limbBetween(sh, [0.1, -0.3, s * 0.1], [0.22, -0.52, s * 0.16], 0.045, jMat);
+            armGs.push({ s: s, g: sh });
+          });
+        } else {
+          /* 双板滑雪者：面朝下滑方向（-Z），双脚平行分开、双手持杖 */
+          var bg2 = new THREE.Group(); g.add(bg2);
+          [-1, 1].forEach(function (s) {
+            part(new THREE.BoxGeometry(0.11, 0.04, 1.56), bMat, s * 0.17, 0.05, 0, bg2); // 板身
+            part(new THREE.BoxGeometry(0.13, 0.15, 0.28), bootMat, s * 0.17, 0.16, 0.03, bg2); // 雪靴
+            limbBetween(g, [s * 0.15, 0.97, 0], [s * 0.21, 0.6, -0.24], 0.085, pantsMat); // 腿：屈膝朝 -Z
+            limbBetween(g, [s * 0.21, 0.6, -0.24], [s * 0.17, 0.27, 0], 0.062, pantsMat);
+          });
+          part(new THREE.BoxGeometry(0.46, 0.2, 0.3), pantsMat, 0, 0.99, 0, bodyG); // 髋部
+          var tg2 = new THREE.Group(); tg2.position.set(0, 1.04, 0); bodyG.add(tg2);
+          part(new THREE.BoxGeometry(0.5, 0.6, 0.28), jMat, 0, 0.32, 0, tg2); // 躯干
+          part(new THREE.BoxGeometry(0.52, 0.05, 0.3), npcReflMat, 0, 0.44, 0, tg2); // 反光条带
+          var hg2 = new THREE.Group(); hg2.position.set(0, 0.8, -0.02); tg2.add(hg2);
+          part(new THREE.SphereGeometry(0.135, 10, 8), skinMat, 0, 0, 0, hg2);
+          part(new THREE.SphereGeometry(0.152, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.58), hMat, 0, 0.018, 0, hg2);
+          part(new THREE.BoxGeometry(0.24, 0.075, 0.09), gogMat, 0, 0.005, -0.1, hg2); // 雪镜（朝 -Z）
+          [-1, 1].forEach(function (s) { // 手臂 + 雪杖：杖组留给主循环交替点杖
+            var sh = new THREE.Group(); sh.position.set(s * 0.29, 0.52, 0); tg2.add(sh);
+            limbBetween(sh, [0, 0, 0], [s * 0.08, -0.3, -0.06], 0.055, jMat);
+            limbBetween(sh, [s * 0.08, -0.3, -0.06], [s * 0.13, -0.55, -0.02], 0.045, jMat);
+            var pg = new THREE.Group(); pg.position.set(s * 0.13, -0.55, -0.02); sh.add(pg);
+            var shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.01, 0.95, 5), poleShaftMat);
+            shaft.position.y = -0.42; shaft.castShadow = true; pg.add(shaft);
+            pg.rotation.x = 0.5;
+            armGs.push({ s: s, g: sh }); poleGs.push({ s: s, g: pg });
+          });
+        }
+        g.scale.setScalar(0.92); // 体量略小于主角
+        g.visible = false;
+        scene.add(g);
+        return { g: g, bodyG: bodyG, armGs: armGs, poleGs: poleGs, kind: kind, active: false, x: 0, z: 0, baseX: 0, speed: 12, phase: 0, carveF: 0.3, amp: 2, wasAhead: false };
+      }
+      var npcs = [];
+      for (var npi = 0; npi < 6; npi++) npcs.push(buildNpcFigure(npi % 2 === 0 ? 'board' : 'ski', npi));
+      var nextNpcAt = 130, whooshCd = 0;
+      function spawnNpcWave() {
+        var visEff = weatherCur.vis * trackDef().visMul;
+        var count = Math.random() < 0.45 ? 2 : 1;
+        var spawned = 0;
+        for (var i = 0; i < npcs.length && spawned < count; i++) {
+          var n = npcs[(Math.floor(Math.random() * npcs.length) + i) % npcs.length];
+          if (n.active) continue;
+          var dist = 65 + Math.random() * 80 + spawned * (26 + Math.random() * 22);
+          dist = Math.min(dist, Math.max(52, visEff * 0.8)); // 雾天只在能见度内出现，不凭空冒出来
+          var side = Math.random() < 0.5 ? -1 : 1;
+          var baseX = side * (4.5 + Math.random() * 14); // 偏在雪道两侧，不死堵正中央
+          for (var j = 0; j < npcs.length; j++) { // 与在场路人拉开：纵向接近时横向至少错开 3.5m，不重叠
+            var o = npcs[j];
+            if (o.active && Math.abs((pz - dist) - o.z) < 16 && Math.abs(baseX - o.baseX) < 3.5) baseX = -baseX;
+          }
+          n.active = true; n.g.visible = true;
+          n.z = pz - dist; n.baseX = baseX;
+          n.speed = 10 + Math.random() * 5; // 略慢于主角（主角 13 起步、越滑越快），可被超车
+          n.phase = Math.random() * 6.28;
+          n.carveF = 0.22 + Math.random() * 0.2;
+          n.amp = 1.6 + Math.random() * 2.4;
+          n.wasAhead = true;
+          spawned++;
+        }
+      }
+      function updateNpcs(dt, tNow) {
+        if (whooshCd > 0) whooshCd -= dt;
+        npcReflMat.emissiveIntensity = ENV.night * 1.15; // 夜里反光条微亮，白天熄灭
+        if (state === 'play' && distance >= nextNpcAt) {
+          spawnNpcWave();
+          nextNpcAt = distance + 150 + Math.random() * 100; // 约每 150–250m 遇上 1–2 名
+        }
+        for (var i = 0; i < npcs.length; i++) {
+          var n = npcs[i];
+          if (!n.active) continue;
+          n.z -= n.speed * dt;
+          n.phase += dt * n.carveF * (0.7 + n.speed * 0.05);
+          var maxLat = lerp(20, 8, narrowFactorD(-n.z)); // 窄道里收进树墙内侧
+          var lx = clamp(n.baseX + Math.sin(n.phase) * n.amp, -maxLat, maxLat);
+          n.x = valleyCenter(n.z) + lx;
+          n.g.position.set(n.x, groundH(n.x, n.z) + rampHeightAt(n.x, n.z) + 0.02, n.z);
+          n.g.rotation.z = Math.sin(n.phase) * (n.kind === 'board' ? 0.3 : 0.2); // 压刃倾身
+          n.g.rotation.y = Math.cos(n.phase) * 0.22; // 随弯摆向
+          n.bodyG.position.y = -0.1 + Math.sin(tNow * 6 + n.phase * 3) * 0.016; // 屈膝起伏
+          for (var a = 0; a < n.armGs.length; a++) {
+            n.armGs[a].g.rotation.x = Math.sin(tNow * 1.7 + n.phase * 2 + (n.armGs[a].s > 0 ? 2.1 : 0)) * 0.07; // 手臂平衡微摆
+          }
+          for (var p = 0; p < n.poleGs.length; p++) { // 双板点杖：左右交替摆杖
+            n.poleGs[p].g.rotation.x = 0.5 + Math.sin(n.phase * 2.4 + (n.poleGs[p].s > 0 ? Math.PI : 0)) * 0.22;
+          }
+          /* 擦身风声：主角纵向掠过路人且横向贴近时轻响一声——不计分、不连击、不慢动作 */
+          var rel = pz - n.z;
+          if (n.wasAhead && rel < 0.4) {
+            if (Math.abs(px - n.x) < 2.4 && whooshCd <= 0 && state === 'play') { whooshSound(); whooshCd = 1.1; }
+          }
+          n.wasAhead = rel > 0.4;
+          if (rel < -18 || rel > 340) { n.active = false; n.g.visible = false; } // 被甩在身后 / 滑得太远：回收复用
+        }
+      }
 
       /* ================= 粒子：飘雪 + 板尾雪雾 ================= */
       function softTexture() {
@@ -1937,6 +2209,23 @@
       function nearSound() {
         if (!AC || muted) return;
         blip(1568, 2093, 0.09, 'sine', 0.065);
+      }
+      /* 掠过路人的擦身风声（第 12 项）：一段带通噪声由高滑低，比树石擦身更轻更短，
+         只提示"刚有人擦身而过"——不计分、不连击、不触发慢动作 */
+      function whooshSound() {
+        if (!AC || muted || !noiseBufWhite) return;
+        var t = AC.currentTime;
+        var s = AC.createBufferSource(); s.buffer = noiseBufWhite;
+        s.playbackRate.value = 0.85 + Math.random() * 0.25;
+        var f = AC.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 1.1;
+        f.frequency.setValueAtTime(2300, t);
+        f.frequency.exponentialRampToValueAtTime(650, t + 0.22);
+        var g = AC.createGain();
+        g.gain.setValueAtTime(0.0008, t);
+        g.gain.exponentialRampToValueAtTime(0.05, t + 0.05);
+        g.gain.exponentialRampToValueAtTime(0.0008, t + 0.24);
+        s.connect(f); f.connect(g); g.connect(outNode());
+        s.start(t); s.stop(t + 0.28);
       }
       /* 换刃短嘶：0.13 秒带通噪声扫频，力度随转向幅度 */
       function carveEdgeSound(strength) {
@@ -2238,6 +2527,8 @@
         for (var fi = 0; fi < flashes.length; fi++) { flashes[fi].t = -1; flashes[fi].grp.visible = false; }
         rampHere = 0; prevRampH = 0; narrowHere = 0; airFromJump = false;
         skiPolePlantT = 0; resetFlyPoles(); // 飞出的雪杖收回手里，装备选择保持不变
+        for (var ni = 0; ni < npcs.length; ni++) { npcs[ni].active = false; npcs[ni].g.visible = false; } // 路人全部回收，开局重新遇上
+        nextNpcAt = 130; whooshCd = 0;
         rider.rotation.set(0, 0, 0);
         for (var i = 0; i < chunks.length; i++) {
           var ch = chunks[i];
@@ -2335,6 +2626,31 @@
         trackCards[tci].addEventListener('click', function (e) {
           e.stopPropagation();
           setTrack(Number(this.getAttribute('data-track')));
+        });
+      }
+      /* 搭配选择：点选即时换到主角身上并存档（stopPropagation 挡住遮罩的点击开始） */
+      var jacketChips = document.querySelectorAll('#jacketChips .swatch');
+      for (var jci = 0; jci < jacketChips.length; jci++) {
+        jacketChips[jci].addEventListener('click', function (e) {
+          e.stopPropagation();
+          outfit.jacket = Number(this.getAttribute('data-jacket'));
+          applyOutfit();
+        });
+      }
+      var boardChips = document.querySelectorAll('#boardChips .chip');
+      for (var bci = 0; bci < boardChips.length; bci++) {
+        boardChips[bci].addEventListener('click', function (e) {
+          e.stopPropagation();
+          outfit.board = Number(this.getAttribute('data-board'));
+          applyOutfit();
+        });
+      }
+      var helmChips = document.querySelectorAll('#helmChips .chip');
+      for (var hci = 0; hci < helmChips.length; hci++) {
+        helmChips[hci].addEventListener('click', function (e) {
+          e.stopPropagation();
+          outfit.helm = Number(this.getAttribute('data-helm'));
+          applyOutfit();
         });
       }
       /* HUD 装备切换按钮：滑行中原地换装备（与 B 键同效） */
@@ -2971,6 +3287,9 @@
             var bz = pz - b.userData.dist;
             b.position.set(px * 0.35 + valleyCenter(bz) * 0.45, bz * SLOPE + b.userData.h * 0.32, bz);
           });
+
+          /* --- 路人推进（第 12 项）：生成 / 同向下行 / 压刃点杖 / 擦身风声 / 回收 --- */
+          updateNpcs(dt, tNow);
 
           /* --- 相机 --- */
           var camTargetPos, lookPt;
