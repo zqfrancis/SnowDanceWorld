@@ -104,6 +104,8 @@
       .trackCard .tkName { font-size: 14.5px; font-weight: 800; color: #eef4fb; letter-spacing: .04em; margin-top: 3px; white-space: nowrap; }
       .trackCard .tkEn { font-size: 9px; letter-spacing: .16em; color: #9fc2e8; margin-top: 2px; white-space: nowrap; }
       .trackCard .tkDesc { font-size: 10.5px; color: #a9c4e4; margin-top: 5px; line-height: 1.5; }
+      .trackCard .tkMtn { font-size: 10px; color: #8fb0d6; margin-top: 4px; letter-spacing: .06em; white-space: nowrap; }
+      .trackCard.sel .tkMtn { color: #ffc9a3; }
       .trackCard.sel {
         border-color: #ff8b2d; background: rgba(255, 122, 26, .16);
         box-shadow: 0 0 0 1px rgba(255, 139, 45, .55), 0 8px 22px rgba(249, 106, 13, .22);
@@ -138,8 +140,10 @@
       #zoneTag.ice { background: rgba(140, 195, 240, .85); color: #0d2c4a; border: 1px solid rgba(210, 240, 255, .9); }
       #zoneTag.jump { background: rgba(255, 122, 26, .9); color: #fff; border: 1px solid rgba(255, 210, 160, .9); }
       #zoneTag.narrow { background: rgba(24, 68, 44, .88); color: #dff5e4; border: 1px solid rgba(140, 220, 170, .8); }
+      #zoneTag.slalom { background: rgba(255, 122, 26, .92); color: #fff; border: 1px solid rgba(255, 220, 170, .9); }
       /* ---------- 天气指示格 + 天气切换提示（第 10 项升级） ---------- */
       #weatherStat .vis { font-size: 10px; color: #9fc2e8; letter-spacing: .04em; margin-top: 1px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+      #trackStat .vis { font-size: 10px; color: #9fc2e8; letter-spacing: .04em; margin-top: 1px; white-space: nowrap; }
       #weatherToast {
         position: fixed; left: 50%; top: 32%; transform: translate(-50%, -50%); z-index: 7;
         padding: 10px 22px 11px; border-radius: 999px; pointer-events: none; white-space: nowrap;
@@ -270,11 +274,12 @@
         /* 开始牌雪道卡改竖排：图标与名称同行、说明占满整行，四张卡 + 开始按钮一屏可达（整牌可滚） */
         .trackRow { flex-direction: column; gap: 8px; margin-top: 8px; }
         .rowLab { margin-top: 12px; }
-        .trackCard { display: flex; align-items: center; text-align: left; gap: 9px; padding: 8px 12px; }
+        .trackCard { display: flex; align-items: center; text-align: left; gap: 9px; padding: 8px 12px; flex-wrap: wrap; }
         .trackCard .tkIcon { font-size: 21px; }
         .trackCard .tkName { margin-top: 0; font-size: 14px; }
         .trackCard .tkEn { display: none; }
         .trackCard .tkDesc { margin-top: 0; flex: 1 1 auto; font-size: 10.5px; }
+        .trackCard .tkMtn { margin-top: 0; flex-basis: 100%; }
         #weatherToast { font-size: 14px; max-width: 92vw; white-space: normal; text-align: center; }
         #muteBtn { top: calc(100px + env(safe-area-inset-top)); }
         #equipBtn { top: calc(152px + env(safe-area-inset-top)); right: 10px; }
@@ -323,7 +328,7 @@
         <div class="stat" id="bestStat"><div class="lab">最佳 BEST</div><div class="val"><span id="hBest">0</span></div></div>
         <div class="stat" id="comboStat"><div class="lab">连击 COMBO</div><div class="val" id="hCombo">×1</div><div class="cbar"><i id="comboBar"></i></div></div>
         <div class="stat"><div class="lab">时段 PHASE</div><div class="val" id="hPhase" style="font-size:15px">☀️ 白天</div></div>
-        <div class="stat" id="trackStat"><div class="lab">雪道 TRACK</div><div class="val" id="hTrack" style="font-size:15px">🌇 黄昏金顶道</div></div>
+        <div class="stat" id="trackStat"><div class="lab">雪道 TRACK</div><div class="val" id="hTrack" style="font-size:15px">🌇 黄昏金顶道</div><div class="vis" id="hMtn">远山 · 尖峰</div></div>
         <div class="stat" id="weatherStat"><div class="lab">天气 WEATHER</div><div class="val" id="hWeather" style="font-size:15px">☀️ 晴雪</div><div class="vis" id="hVis">能见度 250m</div></div>
       </div>
     </div>
@@ -355,6 +360,8 @@
           <div><span class="dot">▸</span> <b>看雪面</b>：中央是压雪纹；更白的<b>粉雪</b>会拖慢你，偏蓝发亮的<b>冰面</b>更滑、转向迟半拍</div>
           <div><span class="dot">▸</span> <b>跳台</b>：橙旗标示的雪包跳台，冲上台顶腾空，落地按腾空时长<b>加分</b>，空中还能轻微修方向</div>
           <div><span class="dot">▸</span> <b>窄道</b>：木栅栏标示入口，两侧树墙收紧、地面有压雪车辙，稳住路线穿过去</div>
+          <div><span class="dot">▸</span> <b>旗门阵</b>：橙旗标示入口，约百米的节奏回转阵列，旗门左右交错、摆幅渐开，跟着节奏穿门连击不断</div>
+          <div><span class="dot">▸</span> <b>远山随道换</b>：四条雪道四种远山——森林山谷、雪原、尖峰、极光尖峰；谷地右侧有缆车缓缓往返，出发点旁山坡上有一座冒烟的山顶小屋</div>
           <div><span class="dot">▸</span> <b>选雪道定光</b>：开局前选一条雪道，整局锁定它的时段光与基础雪质——晨光粉雪最松软、午后冰面最滑、黄昏金顶是标准雪、极光夜里旗门带微光；天气仍会自己流转</div>
           <div><span class="dot">▸</span> <b>天气流转</b>：晴雪 → 中雪 → 暴风雪 → 雾雪循环往复，雪势、侧风与能见度随之呼吸——暴风雪里雾最浓、障碍最晚才看清，看右上角天气牌</div>
           <div><span class="dot">▸</span> 速度越快视野越开、风声越尖，活得越久分越高</div>
@@ -401,26 +408,30 @@
             <div class="tkIcon">🌅</div>
             <div class="tkName">晨光粉雪道</div><div class="tkEn">DAWN POWDER</div>
             <div class="tkDesc">清晨粉光 · 粉雪手感 · 障碍最稀疏，新手友好</div>
+            <div class="tkMtn">远山：森林山谷</div>
           </button>
           <button type="button" class="trackCard" data-track="1" aria-label="选择午后冰面道">
             <div class="tkIcon">☀️</div>
             <div class="tkName">午后冰面道</div><div class="tkEn">MIDDAY ICE</div>
             <div class="tkDesc">正午硬光 · 冰面手感 · 障碍偏密，能见度最高</div>
+            <div class="tkMtn">远山：雪原</div>
           </button>
           <button type="button" class="trackCard sel" data-track="2" aria-label="选择黄昏金顶道">
             <div class="tkIcon">🌇</div>
             <div class="tkName">黄昏金顶道</div><div class="tkEn">GOLDEN PEAK</div>
             <div class="tkDesc">金色时刻 · 标准雪质 · 障碍适中，速度感最强</div>
+            <div class="tkMtn">远山：尖峰</div>
           </button>
           <button type="button" class="trackCard" data-track="3" aria-label="选择极光夜滑道">
             <div class="tkIcon">🌌</div>
             <div class="tkName">极光夜滑道</div><div class="tkEn">AURORA NIGHT</div>
             <div class="tkDesc">极光月光 · 标准雪质 · 能见度低，旗门带微光</div>
+            <div class="tkMtn">远山：尖峰 · 极光</div>
           </button>
         </div>
         <p class="fineprint" id="startBestLine"></p>
         <button class="bigbtn" id="startBtn">开始滑行 · 单板 · 橙 · 黄昏金顶道</button>
-        <p class="fineprint">点任意处或按空格也能开始 · 建议开声音，有风声 · M 键或右上角喇叭可静音 · v16</p>
+        <p class="fineprint">点任意处或按空格也能开始 · 建议开声音，有风声 · M 键或右上角喇叭可静音 · v17 新增：远山随雪道换造型 · 谷地缆车 · 山顶小屋 · 旗门阵</p>
       </div>
     </div>
 
@@ -672,12 +683,49 @@
          障碍密度（inTrack = 每块地形道内树数、rockKeep = 每块岩石保留数）、
          能见度倍率（visMul/nearMul：只缩放天气给出的雾距，天气循环本身不变）、
          雪面观感（roughMul 粗糙度倍率、snowTint 染色）。相机/宽谷/人物/计分一律不动。 */
-      var TRACKS = [
-        { icon: '🌅', name: '晨光粉雪道', ph: 0.905, baseP: 0.8, baseI: 0,    segP: 0.48, segI: 0.60, inTrack: 4, rockKeep: 2, visMul: 1.0,  nearMul: 1.0,  roughMul: 1.06, snowTint: 0,        tintAmt: 0,    gateGlow: false },
-        { icon: '☀️', name: '午后冰面道', ph: 0.02,  baseP: 0,    baseI: 0.75, segP: 0.12, segI: 0.55, inTrack: 9, rockKeep: 4, visMul: 1.18, nearMul: 1.1,  roughMul: 0.6,  snowTint: 0xd8ecff, tintAmt: 0.38, gateGlow: false },
-        { icon: '🌇', name: '黄昏金顶道', ph: 0.42,  baseP: 0,    baseI: 0,    segP: 0.30, segI: 0.54, inTrack: 7, rockKeep: 4, visMul: 1.0,  nearMul: 1.0,  roughMul: 1.0,  snowTint: 0,        tintAmt: 0,    gateGlow: false },
-        { icon: '🌌', name: '极光夜滑道', ph: 0.72,  baseP: 0,    baseI: 0,    segP: 0.30, segI: 0.54, inTrack: 9, rockKeep: 4, visMul: 0.62, nearMul: 0.7,  roughMul: 0.9,  snowTint: 0,        tintAmt: 0,    gateGlow: true }
+      /* ================= 远山造型系列（第 13 项）：三层远山剪影按雪道换造型 =================
+         每条雪道绑定一组造型参数：h/r = 三层（近/中/远）高度与宽度倍率（低缓圆润 ↔ 高耸锐利）、
+         snowMid/snowFar = 中/远层雪冠覆盖比（雪线高低）、forest = 近层针叶林带覆盖比、
+         fogMul = 谷底雾带浓度倍率、bright = 雪面亮度倍率、capCol/farSnowCol = 雪冠染色
+         （金顶道暖金侧光感、极光道冷月光边）。切换雪道时 mtnCur 逐帧平滑趋近目标，造型不跳变 */
+      var MTN_PROFILES = [
+        { h: [0.60, 0.62, 0.58], r: [1.45, 1.35, 1.25], snowMid: 0.34, snowFar: 0.28, forest: 0.82, fogMul: 1.55, bright: 1.0,  capCol: 0xfff3da, farSnowCol: 0xe6ddc9 }, // 森林山谷：低缓圆润 + 密林带 + 谷底浓雾
+        { h: [0.42, 0.40, 0.36], r: [1.80, 1.90, 2.00], snowMid: 0.85, snowFar: 0.90, forest: 0.16, fogMul: 0.80, bright: 1.10, capCol: 0xffffff, farSnowCol: 0xf4f7ff }, // 雪原：平缓开阔雪丘 + 稀疏林 + 雪面更亮
+        { h: [1.00, 1.32, 1.48], r: [1.00, 0.80, 0.74], snowMid: 0.50, snowFar: 0.46, forest: 0.55, fogMul: 1.0,  bright: 1.0,  capCol: 0xffe2b0, farSnowCol: 0xffd9a3 }, // 尖峰：高耸锐利 + 金色峰顶
+        { h: [1.00, 1.32, 1.48], r: [1.00, 0.80, 0.74], snowMid: 0.50, snowFar: 0.46, forest: 0.55, fogMul: 1.0,  bright: 1.0,  capCol: 0xdceaff, farSnowCol: 0xcfe0ff }  // 尖峰·极光：同尖峰造型 + 冷色月光边
       ];
+      var TRACKS = [
+        { icon: '🌅', name: '晨光粉雪道', ph: 0.905, baseP: 0.8, baseI: 0,    segP: 0.48, segI: 0.60, inTrack: 4, rockKeep: 2, visMul: 1.0,  nearMul: 1.0,  roughMul: 1.06, snowTint: 0,        tintAmt: 0,    gateGlow: false, mtn: 0, mtnName: '森林山谷' },
+        { icon: '☀️', name: '午后冰面道', ph: 0.02,  baseP: 0,    baseI: 0.75, segP: 0.12, segI: 0.55, inTrack: 9, rockKeep: 4, visMul: 1.18, nearMul: 1.1,  roughMul: 0.6,  snowTint: 0xd8ecff, tintAmt: 0.38, gateGlow: false, mtn: 1, mtnName: '雪原' },
+        { icon: '🌇', name: '黄昏金顶道', ph: 0.42,  baseP: 0,    baseI: 0,    segP: 0.30, segI: 0.54, inTrack: 7, rockKeep: 4, visMul: 1.0,  nearMul: 1.0,  roughMul: 1.0,  snowTint: 0,        tintAmt: 0,    gateGlow: false, mtn: 2, mtnName: '尖峰' },
+        { icon: '🌌', name: '极光夜滑道', ph: 0.72,  baseP: 0,    baseI: 0,    segP: 0.30, segI: 0.54, inTrack: 9, rockKeep: 4, visMul: 0.62, nearMul: 0.7,  roughMul: 0.9,  snowTint: 0,        tintAmt: 0,    gateGlow: true,  mtn: 3, mtnName: '尖峰 · 极光' }
+      ];
+      /* 当前远山造型（逐帧向所选雪道的造型平滑过渡）；初始 = 默认雪道（金顶道·尖峰），开局不形变 */
+      var mtnCur = (function () {
+        var p = MTN_PROFILES[TRACKS[2].mtn];
+        return {
+          h: p.h.slice(), r: p.r.slice(), snowMid: p.snowMid, snowFar: p.snowFar,
+          forest: p.forest, fogMul: p.fogMul, bright: p.bright,
+          capCol: new THREE.Color(p.capCol), farSnowCol: new THREE.Color(p.farSnowCol)
+        };
+      })();
+      var MTN_TMP_COL = new THREE.Color();
+      function applyMtnStyle(dt) {
+        var p = MTN_PROFILES[trackDef().mtn];
+        var k = 1 - Math.pow(0.08, dt); // 约 1.5 秒滑完造型过渡
+        for (var i = 0; i < 3; i++) {
+          mtnCur.h[i] = lerp(mtnCur.h[i], p.h[i], k);
+          mtnCur.r[i] = lerp(mtnCur.r[i], p.r[i], k);
+        }
+        mtnCur.snowMid = lerp(mtnCur.snowMid, p.snowMid, k);
+        mtnCur.snowFar = lerp(mtnCur.snowFar, p.snowFar, k);
+        mtnCur.forest = lerp(mtnCur.forest, p.forest, k);
+        mtnCur.fogMul = lerp(mtnCur.fogMul, p.fogMul, k);
+        mtnCur.bright = lerp(mtnCur.bright, p.bright, k);
+        mtnCur.capCol.lerp(MTN_TMP_COL.setHex(p.capCol), k);
+        mtnCur.farSnowCol.lerp(MTN_TMP_COL.setHex(p.farSnowCol), k);
+        mtnMidSnowMat.color.copy(mtnCur.capCol); // 中层雪冠染色（金顶暖金 / 极光冷蓝）
+      }
       var curTrack = 2; // 默认黄昏金顶道（标准雪质、原金色时刻观感）
       function trackDef() { return TRACKS[curTrack]; }
       var dnFixedPh = TRACKS[curTrack].ph; // 昼夜锚点：非空时 updateDayNight 停在该相位
@@ -1014,6 +1062,7 @@
             hideInst(trunkIM, slot); hideInst(folIM, slot); hideInst(fol2IM, slot);
             hideInst(pineIM, slot); hideInst(pineTopIM, slot);
           }
+          if (!isStart && nearSlalom(tx, tz)) { hideTree(); continue; } // 旗门阵门位留空，节奏阵列不被树堵
           if (isStart && tz > -26 && Math.abs(tOff) < 26) { hideTree(); continue; }
           if (!inTrack) {
             // 道外林木按密度抽稀：聚簇附近保留概率高，段与段之间疏密分明
@@ -1045,6 +1094,7 @@
           var rz = cz - rnd() * CH_LEN + 6;
           var rx = valleyCenter(rz) + (4 + rnd() * 20) * (rnd() < 0.5 ? -1 : 1); // 岩石只落在谷底可滑区内
           if (isStart && rz > -26) { hideInst(rockIM, rslot); continue; }
+          if (!isStart && nearSlalom(rx, rz)) { hideInst(rockIM, rslot); continue; } // 岩石同样避开旗门阵门位
           var rs = 0.55 + rnd() * 0.9;
           var ry2 = groundH(rx, rz);
           dummy.position.set(rx, ry2 + rs * 0.3, rz);
@@ -1210,6 +1260,118 @@
         nRockIM.instanceMatrix.needsUpdate = true;
       }
 
+      /* ================= 旗门阵（第 13 项）：节奏回转旗门段 =================
+         每个 600m 轮换周期争取排一段约 96m 的旗门阵：9 道门、间距约 11m、左右交错、
+         摆幅由 4m 渐开到 8.4m。选址只落在普通压雪段：避开跳台（150m 处）、窄道（330–430m），
+         且整段覆盖的 48m 雪质分区必须全是普通雪（不与粉雪/冰面段重叠）——候选起点
+         440/464/488 依次试，全被分区占用就本周期不排。阵内旗门按现有规则计分（穿门 +50）；
+         入口两侧各立一面小橙旗，入阵时 HUD 亮 1.5 秒「旗门阵」提示 */
+      var SLALOM_GATES = 9, SLALOM_LEN = 96;
+      var slalomStartCache = {};
+      function slalomStartForCycle(c) {
+        if (c < 0) return -1;
+        var ck = c + '_' + curTrack; // 分区阈值随雪道变，缓存键带上雪道
+        if (slalomStartCache[ck] !== undefined) return slalomStartCache[ck];
+        var starts = [440, 464, 488], found = -1;
+        for (var si = 0; si < starts.length && found < 0; si++) {
+          var st = starts[si];
+          var d0 = c * CYCLE_LEN + st, d1 = d0 + SLALOM_LEN;
+          var ok = true;
+          for (var s = Math.floor(d0 / ZONE_LEN); s <= Math.floor(d1 / ZONE_LEN); s++) {
+            if (segType(s) !== 0) { ok = false; break; } // 粉雪/冰面段让路：整段必须是普通压雪
+          }
+          if (ok) found = st;
+        }
+        slalomStartCache[ck] = found;
+        return found;
+      }
+      function slalomGateList(c) { // 本周期旗门阵的门位（世界坐标），无阵时为空
+        var st = slalomStartForCycle(c);
+        if (st < 0) return [];
+        var list = [];
+        for (var i = 0; i < SLALOM_GATES; i++) {
+          var gz = -(c * CYCLE_LEN + st + 6 + i * 11);
+          var sgn = i % 2 === 0 ? -1 : 1;
+          list.push({ x: valleyCenter(gz) + sgn * (4 + i * 0.55), z: gz });
+        }
+        return list;
+      }
+      function nearSlalom(x, z) { // 散布树/石时避开旗门阵门位，免得障碍堵门
+        var list = slalomGateList(Math.floor(-z / CYCLE_LEN));
+        for (var i = 0; i < list.length; i++) {
+          if (Math.abs(z - list[i].z) < 6 && Math.abs(x - list[i].x) < 6.6) return true;
+        }
+        return false;
+      }
+      var SL_SEC = 2; // 同时保留前后两个周期的阵
+      var sPoleIM = new THREE.InstancedMesh(poleIM.geometry, poleIM.material, SL_SEC * SLALOM_GATES * 2);
+      var sFlagIM = new THREE.InstancedMesh(flagIM.geometry, flagIM.material, SL_SEC * SLALOM_GATES * 2);
+      [sPoleIM, sFlagIM].forEach(function (m) {
+        m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        m.castShadow = true; m.frustumCulled = false; scene.add(m);
+      });
+      for (var s0i = 0; s0i < SL_SEC * SLALOM_GATES * 2; s0i++) { hideInst(sPoleIM, s0i); hideInst(sFlagIM, s0i); }
+      function makeSlalomMarker() { // 入口小橙旗：细杆 + 橙旗（与跳台旗同材质）
+        var g = new THREE.Group();
+        var pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.3, 6), rampPoleMat);
+        pole.position.y = 1.15; pole.castShadow = true; g.add(pole);
+        var fl = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 0.62), rampFlagMat);
+        fl.position.set(-0.5, 1.85, 0); g.add(fl);
+        g.visible = false; scene.add(g);
+        return g;
+      }
+      var slalomMarkers = [makeSlalomMarker(), makeSlalomMarker(), makeSlalomMarker(), makeSlalomMarker()];
+      var slalomGates = [];     // 当前两段阵的门 {x, z, done}
+      var slalomSections = [];  // 当前两段阵的入口 {startZ, announced}
+      var slalomKey = '';
+      var slalomToastT = 0;     // 「旗门阵」HUD 提示剩余秒数（updateZoneTag 读它）
+      function refreshSlalom(pz) {
+        var cyc = Math.floor(-pz / CYCLE_LEN);
+        var key = cyc + '|' + curTrack;
+        if (key === slalomKey) return;
+        slalomKey = key;
+        slalomGates = []; slalomSections = [];
+        var mi = 0;
+        for (var si = 0; si < SL_SEC; si++) {
+          var c = cyc + si;
+          var base = si * SLALOM_GATES * 2;
+          var list = slalomGateList(c);
+          for (var h = 0; h < SLALOM_GATES * 2; h++) {
+            if (h < list.length * 2) continue;
+            hideInst(sPoleIM, base + h); hideInst(sFlagIM, base + h);
+          }
+          if (!list.length) continue;
+          var st = slalomStartForCycle(c);
+          var startZ = -(c * CYCLE_LEN + st);
+          slalomSections.push({ startZ: startZ, announced: false });
+          [-1, 1].forEach(function (sd) { // 入口两侧小橙旗
+            if (mi >= slalomMarkers.length) return;
+            var mx = valleyCenter(startZ) + sd * 7.5;
+            var mk = slalomMarkers[mi++];
+            mk.position.set(mx, groundH(mx, startZ), startZ);
+            mk.visible = true;
+          });
+          list.forEach(function (gt, gi) {
+            slalomGates.push({ x: gt.x, z: gt.z, done: false });
+            var p0 = base + gi * 2;
+            var cA = ((c * SLALOM_GATES + gi) % 2 === 0) ? 0xe5322d : 0x2456e0;
+            var cB = ((c * SLALOM_GATES + gi) % 2 === 0) ? 0x2456e0 : 0xe5322d;
+            [-1, 1].forEach(function (sd, k) {
+              var px2 = gt.x + sd * 3.4, py2 = groundH(px2, gt.z);
+              setInst(sPoleIM, p0 + k, px2, py2 + 1.15, gt.z, 0, 1, 1, 1);
+              sPoleIM.setColorAt(p0 + k, tmpColor.setHex(k === 0 ? cA : cB));
+              setInst(sFlagIM, p0 + k, px2 - sd * 0.5, py2 + 1.78, gt.z, 0, 1, 1, 1);
+              sFlagIM.setColorAt(p0 + k, tmpColor.setHex(k === 0 ? cA : cB));
+            });
+          });
+        }
+        for (; mi < slalomMarkers.length; mi++) slalomMarkers[mi].visible = false;
+        sPoleIM.instanceMatrix.needsUpdate = true;
+        sFlagIM.instanceMatrix.needsUpdate = true;
+        if (sPoleIM.instanceColor) sPoleIM.instanceColor.needsUpdate = true;
+        if (sFlagIM.instanceColor) sFlagIM.instanceColor.needsUpdate = true;
+      }
+
       var colBase = new THREE.Color(0.96, 0.925, 0.855);
       var colPowder = new THREE.Color(1.0, 1.0, 1.0);
       var colIce = new THREE.Color(0.72, 0.85, 1.0);
@@ -1301,6 +1463,14 @@
             mg.add(base2); mg.add(cap2);
           }
           mg.userData.layer = layer;
+          mg.userData.h = h; // 本山高度：造型系统按它算雪冠/林带的覆盖比
+          if (layer === 0) {
+            mg.userData.forest = { mesh: forest, h0: h * 0.55, baseY: forest.position.y - h * 0.275 };
+          } else if (layer === 1) {
+            mg.userData.cap = { mesh: cap1, h0: h * 0.55, r0: r1 * 0.58, baseR: r1, apexY: cap1.position.y + h * 0.275 };
+          } else {
+            mg.userData.cap = { mesh: cap2, h0: h * 0.42, r0: r2 * 0.45, baseR: r2, apexY: cap2.position.y + h * 0.21 };
+          }
           mg.userData.span = L.span;
           mg.userData.scroll = L.scroll;   // 本层视差滚动速率（近快远慢）
           mg.userData.latPar = L.latPar;   // 本层横向视差系数
@@ -1348,6 +1518,166 @@
         bm.userData = cfg;
         scene.add(bm); fogBands.push(bm);
       });
+
+      /* ================= 山顶小屋（第 13 项）：出发点旁山坡上的小木屋 =================
+         固定在出发点右上方的裙边上（横向 +36m、在硬边界之外，玩家滑不到、不挡路、不碰撞）：
+         深色木墙 + 积雪斜顶 + 烟囱淡烟 + 暖光窗。开局就在视野右缘，滑出几秒自然留在身后；
+         窗光强度由 updateDayNight 按时段驱动（黄昏与极光夜最亮）。世界固定，不回收 */
+      var hutWinMat = new THREE.MeshStandardMaterial({ color: 0x59452a, roughness: 0.4, emissive: 0xffa64d, emissiveIntensity: 0.6 });
+      var hutGlowMat = new THREE.SpriteMaterial({
+        map: glowTexture('rgba(255,214,150,1)', 'rgba(255,150,60,.4)'),
+        transparent: true, opacity: 0.15, depthWrite: false, blending: THREE.AdditiveBlending
+      });
+      var hutSmoke = [];
+      (function buildHut() {
+        var g = new THREE.Group();
+        var woodMat = new THREE.MeshStandardMaterial({ color: 0x4a3421, roughness: 0.92 });
+        var woodDarkMat = new THREE.MeshStandardMaterial({ color: 0x33241a, roughness: 0.95 });
+        var stoneMat = new THREE.MeshStandardMaterial({ color: 0x6d7278, roughness: 1 });
+        var roofSnowMat = new THREE.MeshStandardMaterial({ color: 0xf4f7fa, roughness: 0.92 });
+        function bx(w, h, d, mat, x, y, z, rz) {
+          var m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+          m.position.set(x, y, z); if (rz) m.rotation.z = rz;
+          m.castShadow = true; g.add(m); return m;
+        }
+        bx(5.6, 0.5, 4.8, stoneMat, 0, 0.25, 0);            // 石基
+        bx(4.6, 2.3, 3.8, woodMat, 0, 1.65, 0);             // 木墙主体
+        bx(4.7, 0.18, 3.9, woodDarkMat, 0, 0.62, 0);        // 墙脚深色裙边
+        [-2.22, 2.22].forEach(function (sx) { [-1.82, 1.82].forEach(function (sz) {
+          bx(0.16, 2.3, 0.16, woodDarkMat, sx, 1.65, sz);   // 四角立柱
+        }); });
+        /* 积雪斜顶：两块斜板在屋脊相接，白顶吃光、檐口露深色木边 */
+        bx(3.1, 0.16, 4.5, roofSnowMat, -1.18, 3.32, 0, 0.62);
+        bx(3.1, 0.16, 4.5, roofSnowMat, 1.18, 3.32, 0, -0.62);
+        bx(0.24, 0.2, 4.5, woodDarkMat, 0, 3.92, 0);         // 屋脊梁
+        bx(0.52, 1.15, 0.52, stoneMat, 1.05, 3.95, 0.55);   // 烟囱
+        /* 朝雪道一面（-X）：门 + 两扇暖光窗 */
+        bx(0.08, 1.55, 0.85, woodDarkMat, -2.32, 1.3, 0);
+        [-1.15, 1.15].forEach(function (wz) {
+          var win = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.78, 0.72), hutWinMat);
+          win.position.set(-2.32, 1.95, wz); g.add(win);
+          bx(0.05, 0.86, 0.8, woodDarkMat, -2.3, 1.95, wz); // 窗框（在窗后垫一圈深色，靠错位露边）
+          win.position.x = -2.36;
+        });
+        var glow = new THREE.Sprite(hutGlowMat);
+        glow.position.set(-3.1, 1.9, 0); glow.scale.set(4.6, 3.4, 1); g.add(glow);
+        /* 烟柱：6 张软烟精灵循环升起（主循环里按相位推进、渐隐） */
+        for (var si = 0; si < 6; si++) {
+          var sm = new THREE.Sprite(new THREE.SpriteMaterial({
+            map: softTexRef(), transparent: true, opacity: 0, depthWrite: false, color: 0xe8e2d6
+          }));
+          sm.position.set(1.05, 4.6, 0.55); g.add(sm); hutSmoke.push(sm);
+        }
+        var hx = valleyCenter(-38) + 36, hz = -38;
+        g.position.set(hx, groundH(hx, hz) - 0.08, hz);
+        g.rotation.y = 0.42; // 微微转向雪道，开局时门窗朝向镜头一侧
+        scene.add(g);
+      })();
+      /* 烟雾贴图在粒子段才生成，这里先借用同款径向渐变画一张（避免定义顺序问题） */
+      function softTexRef() { return glowTexture('rgba(255,255,255,.9)', 'rgba(255,255,255,.4)'); }
+      function updateHutSmoke(tNow) {
+        for (var i = 0; i < hutSmoke.length; i++) {
+          var p = (tNow * 0.055 + i / hutSmoke.length) % 1;
+          var sm = hutSmoke[i];
+          sm.position.set(1.05 + p * 2.6 + Math.sin(p * 5 + i) * 0.3, 4.6 + p * 7.5, 0.55 + p * 1.2);
+          var sc = 1.1 + p * 3.6;
+          sm.scale.set(sc, sc, 1);
+          sm.material.opacity = 0.15 * Math.sin(Math.PI * p) * (1 - ENV.night * 0.35);
+          sm.material.color.copy(ENV.fogC).lerp(DN_WHITE, 0.45);
+        }
+      }
+
+      /* ================= 缆车（第 13 项）：谷地右侧山坡上方的索道 =================
+         纯氛围：不碰撞、不计分。3 座缆塔沿右侧裙边上方（横向 +78m）排开、随世界回收；
+         双索（横向 ±3m）带轻微垂弧，4 个吊厢在两条索上反向缓慢往返，窗带微光、夜里更亮
+         （强度在 updateDayNight 里驱动）。位置高且偏侧，绝不横穿主角前方视线中心 */
+      var cabinWinMat = new THREE.MeshStandardMaterial({ color: 0x3a3f46, roughness: 0.35, emissive: 0xffb45e, emissiveIntensity: 0.3 });
+      var liftSteelMat = new THREE.MeshStandardMaterial({ color: 0x3c4652, roughness: 0.6, metalness: 0.45 });
+      var LIFT_SPAN = 440, LIFT_X = 78, LIFT_ARM_Y = 14.6;
+      var liftTowers = [];
+      for (var lti = 0; lti < 4; lti++) {
+        var tg = new THREE.Group();
+        var mast = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.36, 15, 6), liftSteelMat);
+        mast.position.y = 7.5; tg.add(mast);
+        var arm = new THREE.Mesh(new THREE.BoxGeometry(9.4, 0.5, 0.6), liftSteelMat);
+        arm.position.y = LIFT_ARM_Y; tg.add(arm);
+        var brace = new THREE.Mesh(new THREE.BoxGeometry(0.18, 6.4, 0.18), liftSteelMat);
+        brace.position.set(0, 11.4, 0); brace.rotation.z = 0.5; tg.add(brace);
+        tg.userData.relZ = 40 - lti * 110;
+        scene.add(tg); liftTowers.push(tg);
+      }
+      var liftLines = [];
+      [-3, 3].forEach(function () {
+        var lg = new THREE.BufferGeometry();
+        lg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(72 * 3), 3));
+        var line = new THREE.Line(lg, new THREE.LineBasicMaterial({ color: 0x2e3640, transparent: true, opacity: 0.8 }));
+        line.frustumCulled = false; scene.add(line); liftLines.push(line);
+      });
+      var liftTops = [{ z: 0, y: 0 }, { z: 0, y: 0 }, { z: 0, y: 0 }, { z: 0, y: 0 }];
+      function cableY(z) {
+        var t = liftTops;
+        if (z >= t[0].z) return t[0].y + (z - t[0].z) * SLOPE * 0.85;
+        for (var i = 0; i < t.length - 1; i++) {
+          if (z <= t[i].z && z >= t[i + 1].z) {
+            var f = (t[i].z - z) / Math.max(1, t[i].z - t[i + 1].z);
+            return lerp(t[i].y, t[i + 1].y, f) - Math.sin(Math.PI * f) * 2.4; // 跨间垂弧
+          }
+        }
+        return t[t.length - 1].y + (t[t.length - 1].z - z) * SLOPE * 0.85;
+      }
+      var liftCabins = [];
+      (function buildCabins() {
+        var cols = [0x9c3a30, 0x33506e, 0x707880, 0x74563a];
+        var cfgs = [{ side: 3, u: 0.15, dir: 1 }, { side: -3, u: 0.42, dir: -1 }, { side: 3, u: 0.64, dir: 1 }, { side: -3, u: 0.86, dir: -1 }];
+        cfgs.forEach(function (cfg, ci2) {
+          var g = new THREE.Group();
+          var bodyMat = new THREE.MeshStandardMaterial({ color: cols[ci2 % cols.length], roughness: 0.55 });
+          var hang = new THREE.Mesh(new THREE.BoxGeometry(0.09, 1.5, 0.09), liftSteelMat);
+          hang.position.y = -0.75; g.add(hang);
+          var roof = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.16, 1.75), liftSteelMat);
+          roof.position.y = -1.5; g.add(roof);
+          var body = new THREE.Mesh(new THREE.BoxGeometry(1.9, 1.65, 1.6), bodyMat);
+          body.position.y = -2.4; g.add(body);
+          var win = new THREE.Mesh(new THREE.BoxGeometry(1.94, 0.55, 1.64), cabinWinMat);
+          win.position.y = -2.2; g.add(win);
+          scene.add(g);
+          liftCabins.push({ g: g, side: cfg.side, u: cfg.u, dir: cfg.dir, ph: ci2 * 1.7 });
+        });
+      })();
+      function updateLift(advance, tNow, dt) {
+        var i, tw;
+        for (i = 0; i < liftTowers.length; i++) {
+          tw = liftTowers[i];
+          tw.userData.relZ += advance;
+          if (tw.userData.relZ > 70) tw.userData.relZ -= LIFT_SPAN;
+          var wz = pz + tw.userData.relZ;
+          var wx = valleyCenter(wz) + LIFT_X;
+          tw.position.set(wx, groundH(wx, wz), wz);
+          liftTops[i].z = wz; liftTops[i].y = tw.position.y + LIFT_ARM_Y;
+        }
+        liftTops.sort(function (a, b) { return b.z - a.z; });
+        /* 双索折线：沿 z 每约 5.6m 取一点，y 走 cableY（塔顶 + 跨间垂弧） */
+        for (var li = 0; li < 2; li++) {
+          var pos = liftLines[li].geometry.attributes.position;
+          var sideOff = li === 0 ? -3 : 3;
+          for (var k = 0; k < 72; k++) {
+            var lz = pz + 55 - k * (400 / 71);
+            pos.setXYZ(k, valleyCenter(lz) + LIFT_X + sideOff, cableY(lz), lz);
+          }
+          pos.needsUpdate = true;
+        }
+        /* 吊厢往返：沿索全长匀速、到端点折返；两条索方向相反，像真缆车一上一下 */
+        for (var ci = 0; ci < liftCabins.length; ci++) {
+          var cb = liftCabins[ci];
+          cb.u += cb.dir * dt * (2.0 / 386);
+          if (cb.u > 0.985) { cb.u = 0.985; cb.dir = -1; }
+          if (cb.u < 0.015) { cb.u = 0.015; cb.dir = 1; }
+          var cz = pz + 48 - cb.u * 386;
+          cb.g.position.set(valleyCenter(cz) + LIFT_X + cb.side, cableY(cz), cz);
+          cb.g.rotation.z = Math.sin(tNow * 0.8 + cb.ph) * 0.035; // 悬挂轻晃
+          cb.g.rotation.x = Math.sin(tNow * 0.6 + cb.ph * 2) * 0.02;
+        }
+      }
 
       /* ================= 主角：单板滑雪者 =================
          侧身站姿：板沿下滑方向（-Z），双脚前后绑在板上，身体正面朝 +X。
@@ -1782,6 +2112,7 @@
          只在开始界面切换：卡片高亮、HUD 雪道格、开始按钮文案、昼夜锚点同步更新，
          开始界面的背景光即时预览所选雪道的时段；开局后整局锁定，滑行中无切换入口 */
       var hTrackEl = document.getElementById('hTrack');
+      var hMtnEl = document.getElementById('hMtn');
       function refreshStartBtn() {
         var sb = document.getElementById('startBtn');
         if (sb) sb.textContent = '开始滑行 · ' + (equip === 'ski' ? '双板' : '单板') + ' · ' + JACKETS[outfit.jacket].name + ' · ' + trackDef().name;
@@ -1793,6 +2124,7 @@
         var cards = document.querySelectorAll('.trackCard');
         for (var c = 0; c < cards.length; c++) cards[c].classList.toggle('sel', Number(cards[c].getAttribute('data-track')) === curTrack);
         if (hTrackEl) hTrackEl.textContent = td.icon + ' ' + td.name;
+        if (hMtnEl) hMtnEl.textContent = '远山 · ' + td.mtnName; // 远山造型随雪道绑定（第 13 项）
         /* 夜滑道旗门微光：旗面/旗杆带一层冷色自发光，低能见度下仍能辨认旗门线（其余雪道关闭） */
         flagIM.material.emissive.setHex(td.gateGlow ? 0x93a7cc : 0x000000);
         flagIM.material.emissiveIntensity = td.gateGlow ? 0.5 : 1;
@@ -2399,13 +2731,17 @@
       var lastZoneKey = '';
       function updateZoneTag() {
         var key = '';
-        if (rampHere > 0.04 || (airGap > 0.05 && airFromJump)) key = 'jump';
+        if (slalomToastT > 0) key = 'slalom';
+        else if (rampHere > 0.04 || (airGap > 0.05 && airFromJump)) key = 'jump';
         else if (narrowHere > 0.35) key = 'narrow';
         else if (zoneOnly.p > 0.3) key = 'powder';
         else if (zoneOnly.i > 0.3) key = 'ice';
         if (key === lastZoneKey) return;
         lastZoneKey = key;
-        if (key === 'jump') {
+        if (key === 'slalom') {
+          zoneTagEl.textContent = '旗门阵 SLALOM · 节奏回转，左右穿门';
+          zoneTagEl.className = 'on slalom';
+        } else if (key === 'jump') {
           zoneTagEl.textContent = '跳台 JUMP · 冲上台顶，腾空计分';
           zoneTagEl.className = 'on jump';
         } else if (key === 'narrow') {
@@ -2547,6 +2883,7 @@
         refreshPatches(0);
         refreshRamps(0);
         refreshNarrow(0);
+        slalomKey = ''; refreshSlalom(0); slalomToastT = 0;
         rider.position.set(0, groundH(0, 0), 0);
         camPos.set(0, groundH(0, 0) + 5.8, 11.5); camX = 0;
       }
@@ -2776,7 +3113,7 @@
         scene.fog.far = visEff;
         scene.fog.near = weatherCur.near * trackDef().nearMul;
         /* 雾带三层浓度随能见度收紧而变厚（opacity 已由 updateDayNight 按昼夜写好，这里只乘天气系数） */
-        var fogBoost = 1 + clamp((250 - visEff) / 190, 0, 1) * 0.9;
+        var fogBoost = (1 + clamp((250 - visEff) / 190, 0, 1) * 0.9) * mtnCur.fogMul; // 远山造型：森林山谷道谷底雾更厚（第 13 项）
         fogBandMat.opacity *= fogBoost;
         fogBandMatNear.opacity *= fogBoost;
         fogBandMatFar.opacity *= fogBoost;
@@ -2890,6 +3227,7 @@
         snowMat.roughness = clamp(ENV.rough * tdSnow.roughMul, 0.35, 1);
         snowMat.color.copy(DN_WHITE).lerp(DN_SNOWCOOL, ENV.night * 0.5);
         if (tdSnow.snowTint) snowMat.color.lerp(TRACK_TINT_TMP.setHex(tdSnow.snowTint), tdSnow.tintAmt);
+        snowMat.color.multiplyScalar(mtnCur.bright); // 远山造型系列：雪原道雪面更亮（第 13 项）
         icePatchMat.specular.lerpColors(DN_ICE_W, DN_ICE_C, ENV.night);
         glitMat.color.copy(ENV.glowC).lerp(DN_WHITE, 0.25);
         sprayMat.color.lerpColors(DN_SPRAY_W, DN_SPRAY_C, ENV.night * 0.85);
@@ -2906,6 +3244,12 @@
         /* 远山剪影（关雾层、自带颜色）夜里同步压暗成深蓝剪影 */
         mtnFarMat2.color.lerpColors(DN_FAR_W, DN_FAR_N, ENV.night);
         mtnFarSnowMat2.color.lerpColors(DN_FARS_W, DN_FARS_N, ENV.night);
+        mtnFarSnowMat2.color.lerp(mtnCur.farSnowCol, 0.38); // 远山造型染色：金顶暖金 / 极光冷蓝（第 13 项）
+        /* 山顶小屋窗光 + 缆车吊厢窗光（第 13 项）：天越暗越亮，黄昏金光时段也提一档 */
+        var duskBoost = clamp(ENV.glowAmt - 0.3, 0, 1);
+        hutWinMat.emissiveIntensity = 0.45 + ENV.night * 1.5 + duskBoost * 0.55;
+        hutGlowMat.opacity = 0.10 + ENV.night * 0.30 + duskBoost * 0.12;
+        cabinWinMat.emissiveIntensity = 0.3 + ENV.night * 1.9;
         /* 星星淡入淡出；极光只在夜里流动 */
         starGroup.visible = ENV.star > 0.02;
         starMat.opacity = ENV.star * (0.82 + 0.18 * Math.sin(tNow * 0.8));
@@ -2972,6 +3316,7 @@
             riderZone.i = Math.max(zfNow.i, tdNow.baseI * (1 - zfNow.p));
             narrowHere = narrowFactorD(-pz);
             var maxSpeed = Math.min(31, 24 + elapsed * 0.12) + riderZone.i * 2.5 - riderZone.p * 3; // 粉雪封顶更低、冰面封顶更高
+            if (slalomToastT > 0) slalomToastT -= dt;
             updateZoneTag(); // 进入/离开分区当帧切换提示牌
             /* 分区粒子外观：粉雪雾团更大更白；冰面几乎不扬雪、只剩细碎冰屑感（点更小、更透） */
             sprayMat.size = 0.42 + riderZone.p * 0.22;
@@ -3020,6 +3365,24 @@
                   spawnGateFlash(g.x, groundH(g.x, g.z) + 1.7, g.z); // 旗门处闪光 + 光环扩散
                   showPopup('+' + gf.pts + ' 旗门！' + (gf.mult > 1 ? ' ×' + gf.mult : ''), 'gate');
                   bellSound(gf.mult);
+                }
+              }
+            }
+            /* 旗门阵判定：入阵口亮提示 1.5 秒；阵内穿门与普通旗门同规则计分 */
+            for (var ssi = 0; ssi < slalomSections.length; ssi++) {
+              var sec = slalomSections[ssi];
+              if (!sec.announced && prevZ > sec.startZ && pz <= sec.startZ) { sec.announced = true; slalomToastT = 1.5; }
+            }
+            for (var sgi2 = 0; sgi2 < slalomGates.length; sgi2++) {
+              var sg2 = slalomGates[sgi2];
+              if (sg2 && !sg2.done && prevZ > sg2.z && pz <= sg2.z) {
+                sg2.done = true;
+                if (Math.abs(px - sg2.x) <= 3.4) {
+                  var sf2 = registerFeat(50); gatesPassed++;
+                  fovKick = 3.2;
+                  spawnGateFlash(sg2.x, groundH(sg2.x, sg2.z) + 1.7, sg2.z);
+                  showPopup('+' + sf2.pts + ' 旗门！' + (sf2.mult > 1 ? ' ×' + sf2.mult : ''), 'gate');
+                  bellSound(sf2.mult);
                 }
               }
             }
@@ -3258,6 +3621,7 @@
                 refreshPatches(pz);
                 refreshRamps(pz);
                 refreshNarrow(pz);
+                refreshSlalom(pz);
               }
             }
           }
@@ -3266,6 +3630,7 @@
              横向同理：玩家变线时近层山体反向偏移最多、远层几乎不动。
              基底高度按层取：近层贴雪墙顶面取样、中层抬高、远层压回远处坡面。 */
           var mtnAdvance = state === 'play' ? speed * dt : 0;
+          applyMtnStyle(rawDt); // 远山造型向所选雪道平滑过渡（第 13 项）
           mountains.forEach(function (m) {
             m.userData.relZ += mtnAdvance * m.userData.scroll;
             if (m.userData.relZ > 70) {
@@ -3281,12 +3646,37 @@
             } else {
               m.position.y = m.position.z * SLOPE - 12;
             }
+            /* 造型应用：整山按层缩放（高/宽），雪冠按覆盖比重定雪线（锥顶不动、冠基贴坡），
+               近层林带按覆盖比从山脚往上铺——三层远山随雪道成系列 */
+            var lay3 = m.userData.layer;
+            m.scale.set(mtnCur.r[lay3], mtnCur.h[lay3], mtnCur.r[lay3]);
+            if (m.userData.cap) {
+              var cap3 = m.userData.cap;
+              var frac3 = lay3 === 1 ? mtnCur.snowMid : mtnCur.snowFar;
+              var nh3 = frac3 * m.userData.h;
+              cap3.mesh.scale.y = nh3 / cap3.h0;
+              var csx3 = (frac3 * cap3.baseR * 1.06) / cap3.r0;
+              cap3.mesh.scale.x = csx3; cap3.mesh.scale.z = csx3;
+              cap3.mesh.position.y = cap3.apexY - nh3 / 2;
+            }
+            if (m.userData.forest) {
+              var fo3 = m.userData.forest;
+              var nf3 = mtnCur.forest * m.userData.h;
+              fo3.mesh.scale.y = nf3 / fo3.h0;
+              fo3.mesh.scale.x = 1.05; fo3.mesh.scale.z = 1.05;
+              fo3.mesh.position.y = fo3.baseY + nf3 / 2;
+            }
           });
           /* 雾带贴在前方固定距离上，跟着坡面高度走 */
           fogBands.forEach(function (b) {
             var bz = pz - b.userData.dist;
             b.position.set(px * 0.35 + valleyCenter(bz) * 0.45, bz * SLOPE + b.userData.h * 0.32, bz);
           });
+
+          /* --- 缆车推进（第 13 项）：缆塔随世界回收、吊厢沿索往返（菜单里也在缓行） --- */
+          updateLift(mtnAdvance, tNow, rawDt);
+          /* --- 山顶小屋烟柱（第 13 项）：烟精灵循环升起渐隐 --- */
+          updateHutSmoke(tNow);
 
           /* --- 路人推进（第 12 项）：生成 / 同向下行 / 压刃点杖 / 擦身风声 / 回收 --- */
           updateNpcs(dt, tNow);
