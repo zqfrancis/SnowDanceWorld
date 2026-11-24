@@ -111,6 +111,24 @@
         box-shadow: 0 0 0 1px rgba(255, 139, 45, .55), 0 8px 22px rgba(249, 106, 13, .22);
       }
       .trackCard.sel .tkName { color: #ffb37a; }
+      /* ---------- 开始界面种子雪山（第 14 项）：输种子 / 随机换山，同一种子同一座山 ---------- */
+      .seedRow { display: flex; align-items: center; gap: 8px; margin: 10px 0 0; flex-wrap: wrap; text-align: left; }
+      .seedRow .seedLab { font-size: 13.5px; font-weight: 700; color: #eef4fb; white-space: nowrap; }
+      #seedInput {
+        width: 106px; padding: 7px 9px; border-radius: 9px; text-align: center;
+        border: 1.5px solid rgba(150, 195, 245, .35); background: rgba(120, 170, 230, .1);
+        color: #fff; font-size: 15px; font-weight: 700; font-family: inherit; letter-spacing: .08em;
+      }
+      #seedInput:focus { outline: none; border-color: #ff8b2d; }
+      .seedBtn {
+        padding: 7px 13px; border-radius: 9px; cursor: pointer; white-space: nowrap;
+        border: 1.5px solid rgba(150, 195, 245, .35); background: rgba(120, 170, 230, .12);
+        color: #eef4fb; font-size: 13px; font-weight: 700; font-family: inherit;
+      }
+      .seedBtn:active { background: rgba(255, 122, 26, .5); }
+      .seedCur { font-size: 12px; color: #ffc9a3; letter-spacing: .04em; white-space: nowrap; }
+      .seedNote { text-align: left; }
+      #seedStat .val { white-space: nowrap; }
       /* ---------- 开始界面人物与装备搭配（第 12 项）：紧凑三行，点选即时高亮 ---------- */
       .outfitBox { margin: 10px 0 0; display: flex; flex-direction: column; gap: 7px; text-align: left; }
       .ofRow { display: flex; align-items: center; gap: 9px; }
@@ -271,6 +289,9 @@
         .hudbar { flex-wrap: wrap; justify-content: center; max-width: 97vw; }
         #weatherStat { min-width: 64px; padding-left: 6px; padding-right: 6px; }
         #trackStat { min-width: 78px; padding-left: 6px; padding-right: 6px; }
+        #seedStat { min-width: 98px; padding-left: 6px; padding-right: 6px; }
+        #seedInput { width: 96px; }
+        .seedRow { gap: 6px; }
         /* 开始牌雪道卡改竖排：图标与名称同行、说明占满整行，四张卡 + 开始按钮一屏可达（整牌可滚） */
         .trackRow { flex-direction: column; gap: 8px; margin-top: 8px; }
         .rowLab { margin-top: 12px; }
@@ -330,6 +351,7 @@
         <div class="stat"><div class="lab">时段 PHASE</div><div class="val" id="hPhase" style="font-size:15px">☀️ 白天</div></div>
         <div class="stat" id="trackStat"><div class="lab">雪道 TRACK</div><div class="val" id="hTrack" style="font-size:15px">🌇 黄昏金顶道</div><div class="vis" id="hMtn">远山 · 尖峰</div></div>
         <div class="stat" id="weatherStat"><div class="lab">天气 WEATHER</div><div class="val" id="hWeather" style="font-size:15px">☀️ 晴雪</div><div class="vis" id="hVis">能见度 250m</div></div>
+        <div class="stat" id="seedStat"><div class="lab">种子 SEED</div><div class="val" id="hSeed" style="font-size:15px">⛰️ 山 #000000</div></div>
       </div>
     </div>
     <div id="zoneTag"></div>
@@ -429,9 +451,18 @@
             <div class="tkMtn">远山：尖峰 · 极光</div>
           </button>
         </div>
+        <p class="rowLab">种子雪山 · 换种子换一座山</p>
+        <div class="seedRow">
+          <span class="seedLab">🏔️ 种子雪山</span>
+          <input id="seedInput" type="text" inputmode="numeric" autocomplete="off" maxlength="6" aria-label="种子号（6 位数字）" />
+          <button type="button" class="seedBtn" id="seedApplyBtn">换山</button>
+          <button type="button" class="seedBtn" id="seedRandomBtn">🎲 随机</button>
+          <span class="seedCur" id="seedCurLab">当前山 #000000</span>
+        </div>
+        <p class="fineprint seedNote">同一座山：输入相同种子号，山形、树林、雪道段落完全相同</p>
         <p class="fineprint" id="startBestLine"></p>
         <button class="bigbtn" id="startBtn">开始滑行 · 单板 · 橙 · 黄昏金顶道</button>
-        <p class="fineprint">点任意处或按空格也能开始 · 建议开声音，有风声 · M 键或右上角喇叭可静音 · v17 新增：远山随雪道换造型 · 谷地缆车 · 山顶小屋 · 旗门阵</p>
+        <p class="fineprint">点任意处或按空格也能开始 · 建议开声音，有风声 · M 键或右上角喇叭可静音 · v18 新增：种子雪山 · 同一种子同一座山 · 可分享种子号</p>
       </div>
     </div>
 
@@ -446,6 +477,7 @@
           <div class="stat"><div class="lab">旗门</div><div class="val" id="rGates">0</div></div>
         </div>
         <p class="fineprint" id="overTrackLine"></p>
+        <p class="fineprint" id="overSeedLine"></p>
         <p class="fineprint" id="bestLine"></p>
         <p class="fineprint" id="todayLine"></p>
         <button class="bigbtn" id="againBtn">再滑一次</button>
@@ -481,6 +513,47 @@
           return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
         };
       }
+      /* ================= 种子雪山（第 14 项） =================
+         mountainSeed（6 位数字，100000–999999）决定整座山：地形相位、雪质分区、
+         跳台/窄道位置、树林岩石、远山轮廓全部由它派生——同一种子永远同一座山，
+         种子号可以分享。首次打开随机生成并存 localStorage，之后沿用上次的山。
+         与山有关的随机数一律走 mulberry32(deriveSeed(...))，禁止 Math.random 定山形
+         （飘雪粒子、喷雾、路人节奏等运行时氛围随机不在此列） */
+      function deriveSeed(base, salt) { return (Math.imul(base >>> 0, 2654435761) ^ Math.imul(salt | 0, 40503)) >>> 0; }
+      var SEED_KEY = 'snow-dance-seed';
+      function clampSeed(v) { // 非法输入取最近合法值：直接钳制到 100000–999999（非数字按 100000），不报错
+        v = Math.floor(Math.abs(Number(v)) || 0);
+        if (v < 100000) return 100000;
+        return v > 999999 ? 999999 : v;
+      }
+      var mountainSeed = 0;
+      try {
+        var seedSaved = parseInt(window.localStorage.getItem(SEED_KEY) || '', 10);
+        mountainSeed = (seedSaved >= 100000 && seedSaved <= 999999) ? seedSaved : clampSeed(100000 + Math.floor(Math.random() * 900000));
+      } catch (e) { mountainSeed = clampSeed(100000 + Math.floor(Math.random() * 900000)); }
+      function saveSeed() { try { window.localStorage.setItem(SEED_KEY, String(mountainSeed)); } catch (e) { /* 存不下就只记本次 */ } }
+      saveSeed();
+      /* 种子派生的地形参数：相位全换、振幅只在 ±15% 内微调——雪丘幅度、谷底平坦宽度 60m、
+         两侧裙边与主坡参数一律不动，保证任何种子下前方雪面仍低于视线、谷底仍开阔 */
+      var seedParams = null;
+      function computeSeedParams() {
+        var r = mulberry32(deriveSeed(mountainSeed, 11));
+        function ph() { return r() * Math.PI * 2; }
+        function am() { return 0.85 + r() * 0.3; } // 振幅微调倍率 0.85–1.15
+        seedParams = {
+          vc1: ph(), vc2: ph(), roll1: ph(), roll2: ph(), roll3: ph(), roll4: ph(),
+          hill1: ph(), hill2: ph(), mog1: ph(), mog2: ph(), drift1: ph(), drift2: ph(),
+          vcAmp1: am(), vcAmp2: am(), rollAmp: am(), hillAmp: am(), mogAmp: am(), driftAmp: am(),
+          segOff: mountainSeed * 0.37,               // 雪质分区哈希的种子偏移
+          jumpOff: Math.round((r() * 2 - 1) * 30),   // 跳台在 600m 周期内平移 ±30m
+          narrowOff: Math.round((r() * 2 - 1) * 25), // 窄道窗口整体平移 ±25m（与跳台永不重叠）
+          slalomPh: r() * Math.PI * 2                // 旗门阵门位左右摆幅相位
+        };
+      }
+      computeSeedParams();
+      function jumpCenterD() { return 150 + seedParams.jumpOff; }
+      function narrowWinA() { return 330 + seedParams.narrowOff; }
+      function narrowWinB() { return 430 + seedParams.narrowOff; }
       var reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
       /* ================= 场景 ================= */
@@ -646,8 +719,9 @@
       var SLOPE = 0.16;
       /* 山谷中心线：整条雪道沿一条缓弯的中心线蜿蜒（振幅 ±16m、波长上千米），
          弯得很慢，弯道外侧始终留着望向地平线的开口 */
-      function valleyCenter(z) {
-        return Math.sin(z * 0.0042) * 9 + Math.sin(z * 0.0016 + 1.3) * 7;
+      function valleyCenter(z) { // 两项正弦的相位与小幅振幅由种子决定：换种子 = 山谷换一条走向
+        return Math.sin(z * 0.0042 + seedParams.vc1) * 9 * seedParams.vcAmp1
+             + Math.sin(z * 0.0016 + seedParams.vc2) * 7 * seedParams.vcAmp2;
       }
       function groundH(x, z) {
         var ax = Math.abs(x - valleyCenter(z)); // 以谷底中心线为原点的横向距离
@@ -655,18 +729,18 @@
            70m 以外才起主坡，二次缓升——横向 150m 处也才约 25m 高，永远压不到镜头视线 */
         var apron = Math.pow(clamp((ax - 30) / 40, 0, 1), 2) * 3.5;
         var wall = Math.pow(Math.max(0, (ax - 70) / 100), 2) * 34;
-        var roll = Math.sin(z * 0.021 + 1.7) * 0.8 + Math.cos(z * 0.0133) * 0.7
-                 + Math.sin((x * 0.6 + z) * 0.03) * 0.3 + Math.sin(z * 0.11) * 0.14;
+        var roll = (Math.sin(z * 0.021 + seedParams.roll1) * 0.8 + Math.cos(z * 0.0133 + seedParams.roll2) * 0.7
+                 + Math.sin((x * 0.6 + z) * 0.03 + seedParams.roll3) * 0.3 + Math.sin(z * 0.11 + seedParams.roll4) * 0.14) * seedParams.rollAmp;
         /* 缓坡丘陵：长波起伏带出滑行节奏，幅度克制——前方雪面永远低于视线、不挡地平线 */
-        var hills = Math.sin(z * 0.03 + 0.6) * 0.38 + Math.sin(z * 0.055 + x * 0.045) * 0.2;
+        var hills = (Math.sin(z * 0.03 + seedParams.hill1) * 0.38 + Math.sin(z * 0.055 + x * 0.045 + seedParams.hill2) * 0.2) * seedParams.hillAmp;
         /* 小雪包：只在雪道范围内（|x|<24 渐入渐出），低频低幅，骑上去是颠簸不是跳台 */
         var tf = clamp(1 - Math.max(0, ax - 15) / 9, 0, 1); tf = tf * tf;
-        var mogul = Math.sin(x * 0.5 + Math.sin(z * 0.3) * 1.4) * Math.sin(z * 0.52 + x * 0.12) * 0.13 * tf
-                  + Math.sin(z * 0.9 + x * 0.8) * 0.045 * tf;
+        var mogul = (Math.sin(x * 0.5 + Math.sin(z * 0.3 + seedParams.mog1) * 1.4) * Math.sin(z * 0.52 + x * 0.12 + seedParams.mog2) * 0.13
+                  + Math.sin(z * 0.9 + x * 0.8 + seedParams.mog2 * 0.5) * 0.045) * tf * seedParams.mogAmp;
         /* 雪道两侧雪沟/雪浪：出雪道后横向波纹加密加深 */
         var sf = clamp((ax - 17) / 10, 0, 1);
-        var drift = Math.sin(x * 0.42 + z * 0.1 + Math.sin(z * 0.23) * 2.0) * 0.16 * sf
-                  + Math.sin(z * 0.34 + x * 0.2) * 0.1 * sf;
+        var drift = (Math.sin(x * 0.42 + z * 0.1 + Math.sin(z * 0.23 + seedParams.drift1) * 2.0) * 0.16
+                  + Math.sin(z * 0.34 + x * 0.2 + seedParams.drift2) * 0.1) * sf * seedParams.driftAmp;
         return z * SLOPE + roll + hills + mogul + drift + apron + wall;
       }
 
@@ -674,7 +748,7 @@
          沿坡按 48m 一段做确定性划分（同一段每次滑到都一样），段内边缘 6m 平滑过渡。
          0=普通压雪 1=粉雪（更白、扬雪多、轻微减速） 2=冰面（偏蓝发亮、更滑、转向迟钝） */
       var ZONE_LEN = 48;
-      function segHash(s) { var h = Math.sin(s * 127.1 + 311.7) * 43758.5453; return h - Math.floor(h); }
+      function segHash(s) { var h = Math.sin(s * 127.1 + 311.7 + seedParams.segOff) * 43758.5453; return h - Math.floor(h); } // +种子偏移：同一段距离在不同种子下分区不同
 
       /* ================= 雪道（第 11 项）：四条可选雪道，开始界面选定、整局锁定 =================
          每条雪道锁定自己的：标志性时段（ph = 昼夜循环相位锚点，选道后循环暂停在该点）、
@@ -756,15 +830,16 @@
          粉雪/冰面分区在这两处自动让路（见 zoneFactors），四种地形交替出现、
          互不重叠，且每种地形都留出可通过的通道 */
       var CYCLE_LEN = 600;
-      function narrowFactorD(d) {
+      function narrowFactorD(d) { // 窄道窗口按种子在周期内平移（330–430m ±25m），边缘 12m 平滑不变
         var local = ((d % CYCLE_LEN) + CYCLE_LEN) % CYCLE_LEN;
-        if (local < 318 || local > 442) return 0;
-        var f = clamp(Math.min(local - 330, 430 - local) / 12, 0, 1);
+        var wa = narrowWinA(), wb = narrowWinB();
+        if (local < wa - 12 || local > wb + 12) return 0;
+        var f = clamp(Math.min(local - wa, wb - local) / 12, 0, 1);
         return f * f * (3 - 2 * f);
       }
-      function jumpDistD(d) {
+      function jumpDistD(d) { // 跳台中心按种子平移（150m ±30m）
         var local = ((d % CYCLE_LEN) + CYCLE_LEN) % CYCLE_LEN;
-        var dd = Math.abs(local - 150);
+        var dd = Math.abs(local - jumpCenterD());
         return Math.min(dd, CYCLE_LEN - dd);
       }
       var rampHere = 0, prevRampH = 0, narrowHere = 0, airFromJump = false;
@@ -968,7 +1043,7 @@
           var cyc = baseCycle + k;
           if (cyc < 0) cyc = 0;
           var r = ramps[k];
-          r.z = -(cyc * CYCLE_LEN + 150);
+          r.z = -(cyc * CYCLE_LEN + jumpCenterD()); // 跳台位置随种子偏移，与 jumpDistD 同一组偏移量
           r.x = valleyCenter(r.z);
           r.cycle = cyc;
           r.group.position.set(r.x, groundH(r.x, r.z) - 0.05, r.z);
@@ -1014,6 +1089,9 @@
       function hideInst(im, i) { setInst(im, i, 0, -9999, 0, 0, 0.001, 0.001, 0.001); }
 
       var T_PER = 17, R_PER = 4; // 每块地形的树/石数量
+      /* 块种子 = mountainSeed 与块世界序号的纯函数（第 14 项）：同一座山滑到同一段距离，
+         永远是同一棵树、同一块岩石；chunk 回收复用时按新世界序号重新取种子 */
+      function chunkSeedFor(worldIdx) { return deriveSeed(mountainSeed, 31000 + worldIdx); }
       function scatterChunk(ch, isStart) {
         var rnd = mulberry32(ch.seed);
         ch.colliders = [];
@@ -1194,9 +1272,9 @@
           var fence = fences[k], rut = ruts[k];
           var cyc = baseCycle + k;
           if (cyc < 0) { fence.visible = false; rut.visible = false; continue; }
-          var secD0 = cyc * CYCLE_LEN + 330;
+          var secD0 = cyc * CYCLE_LEN + narrowWinA(); // 窄道窗口随种子平移，与 narrowFactorD 同一组偏移量
           var z0 = -secD0, cenZ = z0 - 50;
-          var rnd = mulberry32(9100 + cyc * 137);
+          var rnd = mulberry32(deriveSeed(mountainSeed, 9100 + cyc * 137)); // 树墙/道内障碍由种子+周期决定
           /* 两侧树墙：每 5–8m 一棵，贴着 ±11–14m 立着，把谷底视觉上收紧 */
           for (var s = 5; s < 99; s += 5 + rnd() * 3) {
             for (var sd2 = 0; sd2 < 2; sd2++) {
@@ -1292,7 +1370,7 @@
         for (var i = 0; i < SLALOM_GATES; i++) {
           var gz = -(c * CYCLE_LEN + st + 6 + i * 11);
           var sgn = i % 2 === 0 ? -1 : 1;
-          list.push({ x: valleyCenter(gz) + sgn * (4 + i * 0.55), z: gz });
+          list.push({ x: valleyCenter(gz) + sgn * (4 + i * 0.55 + Math.sin(seedParams.slalomPh + i * 0.9) * 1.1), z: gz }); // 门位摆幅相位由种子决定
         }
         return list;
       }
@@ -1405,7 +1483,7 @@
         mesh.receiveShadow = true;
         mesh.position.z = 40 - ci * CH_LEN;
         scene.add(mesh);
-        var chObj = { idx: ci, mesh: mesh, geo: geo, seed: 1000 + ci * 77, colliders: [], gate: null };
+        var chObj = { idx: ci, mesh: mesh, geo: geo, seed: 0, worldIdx: ci, colliders: [], gate: null }; // seed 在 resetWorld 里按世界序号赋值
         chunks.push(chObj);
         buildChunkGeo(chObj);
       }
@@ -1430,55 +1508,70 @@
         { n: 8, span: 340, scroll: 0.5, latPar: 0.07, xMin: 215, xVar: 65, hMin: 64, hVar: 34 },  // 中层：雪顶
         { n: 6, span: 400, scroll: 0.22, latPar: 0.03, xMin: 255, xVar: 85, hMin: 120, hVar: 55 }  // 远山：雾层剪影
       ];
-      function mtnPickX(L, layer, i) {
-        if (layer === 2 && i % 3 === 0) return (Math.random() - 0.5) * 110; // 远层每三座有一座正横在天际线中央
+      function mtnPickX(L, layer, i, rnd) { // 随机数由调用方按种子派生（第 14 项）：同一座山的远山轮廓恒定
+        if (layer === 2 && i % 3 === 0) return (rnd() - 0.5) * 110; // 远层每三座有一座正横在天际线中央
         var side = (i + layer) % 2 === 0 ? -1 : 1;
-        return side * (L.xMin + Math.random() * L.xVar);
+        return side * (L.xMin + rnd() * L.xVar);
       }
-      MTN_LAYERS.forEach(function (L, layer) {
-        for (var mi = 0; mi < L.n; mi++) {
-          var mg = new THREE.Group();
-          var h = L.hMin + Math.random() * L.hVar;
-          if (layer === 0) {
-            var r0 = h * (0.85 + Math.random() * 0.2);
-            var rock = new THREE.Mesh(new THREE.ConeGeometry(r0, h, 6), mtnNearRockMat);
-            rock.position.y = h / 2 - 4;
-            var forest = new THREE.Mesh(new THREE.ConeGeometry(r0 * 1.05, h * 0.55, 6), mtnNearMat);
-            forest.position.y = h * 0.27 - 4; // 下半截深绿 = 树线带
-            mg.add(rock); mg.add(forest);
-          } else if (layer === 1) {
-            var r1 = h * (0.66 + Math.random() * 0.14);
-            var base1 = new THREE.Mesh(new THREE.ConeGeometry(r1, h, 5), mtnMidRockMat);
-            base1.position.y = h / 2 - 8;
-            var cap1 = new THREE.Mesh(new THREE.ConeGeometry(r1 * 0.58, h * 0.55, 5), mtnMidSnowMat);
-            cap1.position.y = h * 0.72 - 8; // 大半截雪顶，平直光面/阴影面分明
-            cap1.rotation.y = Math.random() * 1.2;
-            mg.add(base1); mg.add(cap1);
-          } else {
-            var r2 = h * (0.72 + Math.random() * 0.16);
-            var base2 = new THREE.Mesh(new THREE.ConeGeometry(r2, h, 5), mtnFarMat2);
-            base2.position.y = h / 2 - 12;
-            var cap2 = new THREE.Mesh(new THREE.ConeGeometry(r2 * 0.45, h * 0.42, 5), mtnFarSnowMat2);
-            cap2.position.y = h * 0.79 - 12;
-            mg.add(base2); mg.add(cap2);
-          }
-          mg.userData.layer = layer;
-          mg.userData.h = h; // 本山高度：造型系统按它算雪冠/林带的覆盖比
-          if (layer === 0) {
-            mg.userData.forest = { mesh: forest, h0: h * 0.55, baseY: forest.position.y - h * 0.275 };
-          } else if (layer === 1) {
-            mg.userData.cap = { mesh: cap1, h0: h * 0.55, r0: r1 * 0.58, baseR: r1, apexY: cap1.position.y + h * 0.275 };
-          } else {
-            mg.userData.cap = { mesh: cap2, h0: h * 0.42, r0: r2 * 0.45, baseR: r2, apexY: cap2.position.y + h * 0.21 };
-          }
-          mg.userData.span = L.span;
-          mg.userData.scroll = L.scroll;   // 本层视差滚动速率（近快远慢）
-          mg.userData.latPar = L.latPar;   // 本层横向视差系数
-          mg.userData.baseX = mtnPickX(L, layer, mi);
-          mg.userData.relZ = -(50 + layer * 58) - (L.span / L.n) * mi - Math.random() * 22; // 近层从 50m 起、中层 108m 起、远层 166m 起
-          scene.add(mg); mountains.push(mg);
+      function createMountain(L, layer, mi, rnd) {
+        var mg = new THREE.Group();
+        var h = L.hMin + rnd() * L.hVar;
+        if (layer === 0) {
+          var r0 = h * (0.85 + rnd() * 0.2);
+          var rock = new THREE.Mesh(new THREE.ConeGeometry(r0, h, 6), mtnNearRockMat);
+          rock.position.y = h / 2 - 4;
+          var forest = new THREE.Mesh(new THREE.ConeGeometry(r0 * 1.05, h * 0.55, 6), mtnNearMat);
+          forest.position.y = h * 0.27 - 4; // 下半截深绿 = 树线带
+          mg.add(rock); mg.add(forest);
+        } else if (layer === 1) {
+          var r1 = h * (0.66 + rnd() * 0.14);
+          var base1 = new THREE.Mesh(new THREE.ConeGeometry(r1, h, 5), mtnMidRockMat);
+          base1.position.y = h / 2 - 8;
+          var cap1 = new THREE.Mesh(new THREE.ConeGeometry(r1 * 0.58, h * 0.55, 5), mtnMidSnowMat);
+          cap1.position.y = h * 0.72 - 8; // 大半截雪顶，平直光面/阴影面分明
+          cap1.rotation.y = rnd() * 1.2;
+          mg.add(base1); mg.add(cap1);
+        } else {
+          var r2 = h * (0.72 + rnd() * 0.16);
+          var base2 = new THREE.Mesh(new THREE.ConeGeometry(r2, h, 5), mtnFarMat2);
+          base2.position.y = h / 2 - 12;
+          var cap2 = new THREE.Mesh(new THREE.ConeGeometry(r2 * 0.45, h * 0.42, 5), mtnFarSnowMat2);
+          cap2.position.y = h * 0.79 - 12;
+          mg.add(base2); mg.add(cap2);
         }
-      });
+        mg.userData.layer = layer;
+        mg.userData.h = h; // 本山高度：造型系统按它算雪冠/林带的覆盖比
+        if (layer === 0) {
+          mg.userData.forest = { mesh: forest, h0: h * 0.55, baseY: forest.position.y - h * 0.275 };
+        } else if (layer === 1) {
+          mg.userData.cap = { mesh: cap1, h0: h * 0.55, r0: r1 * 0.58, baseR: r1, apexY: cap1.position.y + h * 0.275 };
+        } else {
+          mg.userData.cap = { mesh: cap2, h0: h * 0.42, r0: r2 * 0.45, baseR: r2, apexY: cap2.position.y + h * 0.21 };
+        }
+        mg.userData.span = L.span;
+        mg.userData.scroll = L.scroll;   // 本层视差滚动速率（近快远慢）
+        mg.userData.latPar = L.latPar;   // 本层横向视差系数
+        mg.userData.baseX = mtnPickX(L, layer, mi, rnd);
+        mg.userData.relZ = -(50 + layer * 58) - (L.span / L.n) * mi - rnd() * 22; // 近层从 50m 起、中层 108m 起、远层 166m 起
+        return mg;
+      }
+      /* 三层远山整体重建（第 14 项）：每层用 mulberry32(deriveSeed(mountainSeed, layer)) 生成，
+         换种子时整组换掉——造型系列（MTN_PROFILES）不变，只是具体山形随种子变 */
+      function buildMountains() {
+        for (var oi = mountains.length - 1; oi >= 0; oi--) {
+          scene.remove(mountains[oi]);
+          mountains[oi].traverse(function (o) { if (o.geometry) o.geometry.dispose(); });
+        }
+        mountains.length = 0;
+        MTN_LAYERS.forEach(function (L, layer) {
+          var rnd = mulberry32(deriveSeed(mountainSeed, 900 + layer));
+          for (var mi = 0; mi < L.n; mi++) {
+            var mg = createMountain(L, layer, mi, rnd);
+            scene.add(mg); mountains.push(mg);
+          }
+        });
+      }
+      buildMountains();
 
       /* 雾带三层（近 / 中 / 远各一张横贯山谷的半透明雾墙、各用独立材质）：
          近处一层薄雾从镜头前掠过、中景一道压在中层山脚、远景一道托着远山剪影；
@@ -1529,8 +1622,10 @@
         transparent: true, opacity: 0.15, depthWrite: false, blending: THREE.AdditiveBlending
       });
       var hutSmoke = [];
+      var hutGroup = null; // 换种子时按新谷底中心线重新落位（小屋固定在出发点旁，不随 chunk 回收）
       (function buildHut() {
         var g = new THREE.Group();
+        hutGroup = g;
         var woodMat = new THREE.MeshStandardMaterial({ color: 0x4a3421, roughness: 0.92 });
         var woodDarkMat = new THREE.MeshStandardMaterial({ color: 0x33241a, roughness: 0.95 });
         var stoneMat = new THREE.MeshStandardMaterial({ color: 0x6d7278, roughness: 1 });
@@ -2132,6 +2227,48 @@
         refreshStartBtn();
       }
       setTrack(curTrack);
+
+      /* ================= 种子雪山界面（第 14 项） =================
+         换种子 = 换一座山：重算种子参数、清旗门阵选址缓存、重建三层远山，
+         再 resetWorld 按新种子重建地形块 / 树林 / 分区 / 跳台 / 窄道——
+         开始牌背后的场景立刻就是新山，无需刷新；成绩存档与山无关，不清空 */
+      var seedInputEl = document.getElementById('seedInput');
+      var seedCurEl = document.getElementById('seedCurLab');
+      var hSeedEl = document.getElementById('hSeed');
+      function updateSeedUI() {
+        if (seedInputEl) seedInputEl.value = String(mountainSeed);
+        if (seedCurEl) seedCurEl.textContent = '当前山 #' + mountainSeed;
+        if (hSeedEl) hSeedEl.textContent = '⛰️ 山 #' + mountainSeed;
+      }
+      function applyMountainSeed(v) {
+        mountainSeed = clampSeed(v);
+        saveSeed();
+        computeSeedParams();
+        slalomStartCache = {}; // 分区随种子变，旗门阵选址缓存作废
+        buildMountains();
+        if (hutGroup) { var hx2 = valleyCenter(-38) + 36; hutGroup.position.set(hx2, groundH(hx2, -38) - 0.08, -38); } // 小屋跟着新谷底落位
+        updateSeedUI();
+        resetWorld();
+      }
+      function seedFromInput() { // 只取数字；空输入 = 保持当前山；非法值由 clampSeed 取最近合法值
+        var raw = seedInputEl ? seedInputEl.value.replace(/\D/g, '') : '';
+        return raw === '' ? mountainSeed : clampSeed(parseInt(raw, 10));
+      }
+      document.getElementById('seedApplyBtn').addEventListener('click', function (e) { e.stopPropagation(); applyMountainSeed(seedFromInput()); });
+      document.getElementById('seedRandomBtn').addEventListener('click', function (e) {
+        e.stopPropagation();
+        var ns;
+        do { ns = 100000 + Math.floor(Math.random() * 900000); } while (ns === mountainSeed);
+        applyMountainSeed(ns);
+      });
+      if (seedInputEl) {
+        seedInputEl.addEventListener('click', function (e) { e.stopPropagation(); }); // 点输入框不触发遮罩的点击开始
+        seedInputEl.addEventListener('keydown', function (e) { // 输入框里的按键不漏给全局快捷键（空格开始 / B 换装备等）
+          e.stopPropagation();
+          if (e.code === 'Enter') applyMountainSeed(seedFromInput());
+        });
+      }
+      updateSeedUI();
 
       rider.position.set(0, groundH(0, 0), 0);
       scene.add(rider);
@@ -2869,16 +3006,19 @@
         for (var i = 0; i < chunks.length; i++) {
           var ch = chunks[i];
           ch.mesh.position.z = 40 - i * CH_LEN;
-          ch.seed = 1000 + i * 131 + Math.floor(Math.random() * 9999);
+          ch.worldIdx = i;
+          ch.seed = chunkSeedFor(i); // 世界序号 i 的块种子只由 mountainSeed 决定，重置后同一段还是同一片树林
           buildChunkGeo(ch);
           scatterChunk(ch, i === 0);
         }
         var layerCount = [0, 0, 0];
+        var layerRnds = [mulberry32(deriveSeed(mountainSeed, 960)), mulberry32(deriveSeed(mountainSeed, 961)), mulberry32(deriveSeed(mountainSeed, 962))];
         mountains.forEach(function (m) {
           var L = MTN_LAYERS[m.userData.layer];
           var k = layerCount[m.userData.layer]++;
-          m.userData.baseX = mtnPickX(L, m.userData.layer, k);
-          m.userData.relZ = -(50 + m.userData.layer * 58) - (L.span / L.n) * k - Math.random() * 22;
+          var rr = layerRnds[m.userData.layer];
+          m.userData.baseX = mtnPickX(L, m.userData.layer, k, rr);
+          m.userData.relZ = -(50 + m.userData.layer * 58) - (L.span / L.n) * k - rr() * 22;
         });
         refreshPatches(0);
         refreshRamps(0);
@@ -2930,6 +3070,7 @@
         document.getElementById('rScore').textContent = fs;
         document.getElementById('rGates').textContent = gatesPassed;
         document.getElementById('overTrackLine').textContent = '本次雪道：' + trackDef().icon + ' ' + trackDef().name;
+        document.getElementById('overSeedLine').textContent = '山 #' + mountainSeed; // 破纪录时也能看到是在哪座山上滑的
         /* 成绩落盘：破历史最佳 / 破今日最佳分别判定（今日最佳 ≤ 历史最佳，
            所以破历史必然同破今日，提示以历史为准） */
         var brokeBest = fs > bestScore && fs > 0;
@@ -3615,7 +3756,8 @@
               if (ch2.mesh.position.z - CH_LEN / 2 > pz + 24) {
                 ch2.mesh.position.z = minZ - CH_LEN;
                 minZ = ch2.mesh.position.z;
-                ch2.seed += 5557;
+                ch2.worldIdx = Math.round((40 - ch2.mesh.position.z) / CH_LEN); // 新位置的世界序号（位置恒为 40 - k*CH_LEN）
+                ch2.seed = chunkSeedFor(ch2.worldIdx);
                 buildChunkGeo(ch2);
                 scatterChunk(ch2, false);
                 refreshPatches(pz);
@@ -3635,7 +3777,9 @@
             m.userData.relZ += mtnAdvance * m.userData.scroll;
             if (m.userData.relZ > 70) {
               m.userData.relZ -= m.userData.span;
-              m.userData.baseX = mtnPickX(MTN_LAYERS[m.userData.layer], m.userData.layer, Math.floor(Math.random() * 9));
+              m.userData.pickN = (m.userData.pickN || 0) + 1; // 回收换位也走种子派生：同一座山远山换位序列恒定
+              var mrr = mulberry32(deriveSeed(mountainSeed, 5000 + m.userData.layer * 131 + m.userData.pickN));
+              m.userData.baseX = mtnPickX(MTN_LAYERS[m.userData.layer], m.userData.layer, Math.floor(mrr() * 9), mrr);
             }
             m.position.z = pz + m.userData.relZ;
             m.position.x = m.userData.baseX - px * m.userData.latPar;
