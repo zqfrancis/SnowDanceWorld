@@ -3294,11 +3294,16 @@
          侧风 / 雪粒大小）连续变化、绝不跳变。雾色不归天气管——仍由 updateDayNight
          按时段给出（白天冷白、黄昏暖、极光夜深蓝），天气只接管 fog 的 near/far；
          飘雪复用既有粒子系统（drawRange 控密度），风声只调既有三层的参数。 */
+      /* near = 雾的起点：起点之前完全不沾雾色。浓雾两档（暴风雪 / 雾雪）的起点特意推到
+         23–25m——相机在主角身后约 11.5m，障碍进入前方 15–25m 的反应距离时距相机约
+         26–37m，旧起点（7–10m）下这段距离已被雾色洗掉三到五成、和白雪面糊成一片；
+         推远起点后近处只蒙一层薄雾、保留模糊的深色身影，vis（完全隐没点）只小幅外移，
+         远处与远山照旧隐没在雾里。晴雪 / 中雪两档的 near 与 vis 一律不动 */
       var WEATHER_DEFS = [
         { icon: '☀️', name: '晴雪',   vis: 250, near: 34, snow: 0.22, wind: 0.12, size: 0.88, hold: 30, toast: '☀️ 晴雪 · 能见度良好' },
         { icon: '🌨️', name: '中雪',   vis: 150, near: 24, snow: 0.55, wind: 0.42, size: 1.00, hold: 27, toast: '🌨️ 中雪 · 雪势渐强' },
-        { icon: '❄️', name: '暴风雪', vis: 60,  near: 10, snow: 1.00, wind: 1.00, size: 1.28, hold: 32, toast: '❄️ 暴风雪来临，能见度降低' },
-        { icon: '🌫️', name: '雾雪',   vis: 90,  near: 7,  snow: 0.34, wind: 0.26, size: 0.95, hold: 28, toast: '🌫️ 雾雪弥漫，能见度低' }
+        { icon: '❄️', name: '暴风雪', vis: 74,  near: 23, snow: 1.00, wind: 1.00, size: 1.28, hold: 32, toast: '❄️ 暴风雪来临，能见度降低' },
+        { icon: '🌫️', name: '雾雪',   vis: 102, near: 25, snow: 0.34, wind: 0.26, size: 0.95, hold: 28, toast: '🌫️ 雾雪弥漫，能见度低' }
       ];
       var WEATHER_TRANS = 7; // 档间过渡秒数（规格 6–8 秒）
       function weatherSnap(d) { return { vis: d.vis, near: d.near, snow: d.snow, wind: d.wind, size: d.size }; }
@@ -3347,11 +3352,16 @@
           }
         }
         weatherWind = weatherCur.wind;
-        /* 雾与能见度：far/near 跟天气走（晴雪 250m → 暴风雪 60m → 雾雪 90m），远山随之隐没/显现；
-           雪道倍率（第 11 项）只缩放距离：夜滑道雾效收紧、远山隐没，冰面道能见度最高，天气档位与循环不变 */
+        /* 雾与能见度：far/near 跟天气走（晴雪 250m → 暴风雪 74m → 雾雪 102m），远山随之隐没/显现；
+           雪道倍率（第 11 项）只缩放距离：夜滑道雾效收紧、远山隐没，冰面道能见度最高，天气档位与循环不变。
+           近景剪影托底：浓雾时雪道倍率会把雾起点再往回压（夜滑道 nearMul 0.7），这里按插值后的
+           vis 算浓度、给起点托底——越浓的雾托得越高，保证任何雪道上前方 15–25m 内的树、岩石、
+           旗门、路人都留得住深色轮廓；晴雪 / 中雪 vis 高、托底量为 0，与原来完全一致。
+           托底量随 vis 连续变化，天气过渡期间不跳变 */
         var visEff = weatherCur.vis * trackDef().visMul;
         scene.fog.far = visEff;
-        scene.fog.near = weatherCur.near * trackDef().nearMul;
+        var heavyFog = clamp((150 - weatherCur.vis) / 90, 0, 1); // 中雪及以上为 0，暴风雪约 0.84，雾雪约 0.53
+        scene.fog.near = Math.max(weatherCur.near * trackDef().nearMul, 20 * heavyFog);
         /* 雾带三层浓度随能见度收紧而变厚（opacity 已由 updateDayNight 按昼夜写好，这里只乘天气系数） */
         var fogBoost = (1 + clamp((250 - visEff) / 190, 0, 1) * 0.9) * mtnCur.fogMul; // 远山造型：森林山谷道谷底雾更厚（第 13 项）
         fogBandMat.opacity *= fogBoost;
