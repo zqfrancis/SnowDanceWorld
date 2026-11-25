@@ -462,7 +462,7 @@
         <p class="fineprint seedNote">同一座山：输入相同种子号，山形、树林、雪道段落完全相同</p>
         <p class="fineprint" id="startBestLine"></p>
         <button class="bigbtn" id="startBtn">开始滑行 · 单板 · 橙 · 黄昏金顶道</button>
-        <p class="fineprint">点任意处或按空格也能开始 · 建议开声音，有风声 · M 键或右上角喇叭可静音 · v18 新增：种子雪山 · 同一种子同一座山 · 可分享种子号</p>
+        <p class="fineprint">点任意处或按空格也能开始 · 建议开声音，有风声 · M 键或右上角喇叭可静音 · v19 新增：森林规则 · 网格哈希布树，成片林带、林间空地与雪线 · 同一种子同一座山</p>
       </div>
     </div>
 
@@ -1054,7 +1054,10 @@
       var chunks = [];
 
       /* 障碍物实例池 */
-      var MAXT = 280, MAXR = 100, MAXP = 80, MAXF = 40;
+      /* 树实例槽位按块划分（第 15 项）：每块地形占 TREE_BLK 个槽——前 T_PER 个给道内障碍树，
+         其余给网格哈希森林；池子仍是同一批 InstancedMesh、同一套 chunk 回收机制 */
+      var TREE_BLK = 384;
+      var MAXT = CH_NUM * TREE_BLK, MAXR = 100, MAXP = 80, MAXF = 40;
       var trunkIM = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.2, 0.3, 1.7, 6),
         new THREE.MeshStandardMaterial({ color: 0x6b4a2e, roughness: 0.9 }), MAXT);
       var folIM = new THREE.InstancedMesh(new THREE.ConeGeometry(1.7, 5.6, 7),
@@ -1066,13 +1069,16 @@
         new THREE.MeshStandardMaterial({ color: 0x4a7d2e, roughness: 0.9 }), MAXT);
       var pineTopIM = new THREE.InstancedMesh(new THREE.ConeGeometry(1.35, 2.2, 8),
         new THREE.MeshStandardMaterial({ color: 0x5c9138, roughness: 0.9 }), MAXT);
+      /* 树冠积雪（第 15 项）：一顶白色小锥压在树冠上段——针叶树带雪，与 fol2/pineTop 同槽位同步摆/藏 */
+      var capIM = new THREE.InstancedMesh(new THREE.ConeGeometry(0.85, 2.6, 7),
+        new THREE.MeshStandardMaterial({ color: 0xeef4fc, roughness: 1 }), MAXT);
       var rockIM = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(1, 0),
         new THREE.MeshStandardMaterial({ color: 0x77808c, roughness: 0.95, flatShading: true }), MAXR);
       var poleIM = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.055, 0.055, 2.3, 6),
         new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 }), MAXP);
       var flagIM = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.95, 0.62),
         new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6, side: THREE.DoubleSide }), MAXF);
-      [trunkIM, folIM, fol2IM, pineIM, pineTopIM, rockIM, poleIM, flagIM].forEach(function (m) {
+      [trunkIM, folIM, fol2IM, pineIM, pineTopIM, capIM, rockIM, poleIM, flagIM].forEach(function (m) {
         m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         m.castShadow = true; m.frustumCulled = false; scene.add(m);
       });
@@ -1088,16 +1094,46 @@
       }
       function hideInst(im, i) { setInst(im, i, 0, -9999, 0, 0, 0.001, 0.001, 0.001); }
 
-      var T_PER = 17, R_PER = 4; // 每块地形的树/石数量
+      var T_PER = 17, R_PER = 4; // 每块地形的道内树/石数量
+      var F_PER = TREE_BLK - T_PER; // 每块地形的森林树槽位上限（第 15 项）
       /* 块种子 = mountainSeed 与块世界序号的纯函数（第 14 项）：同一座山滑到同一段距离，
          永远是同一棵树、同一块岩石；chunk 回收复用时按新世界序号重新取种子 */
       function chunkSeedFor(worldIdx) { return deriveSeed(mountainSeed, 31000 + worldIdx); }
+      /* ================= 森林规则（第 15 项）：网格哈希布树 =================
+         地面切 4.5m 格子：每格有没有树、树种、大小、朝向、在格内的偏移，全部由
+         (格号, mountainSeed 派生盐) 的整数哈希决定——不存任何树的位置表，同一格
+         永远同一棵树；chunk 回收时只是按自己覆盖的 z 带重新枚举格子，换种子则
+         盐全换、整片林子跟着换。密度由低频值噪声场调制：密林带与林间空地成片
+         交替，不是均匀撒点。雪道走廊（谷底中心线 ±27m 内）绝不长树；相对谷底
+         高差超过雪线（11m）的高处山坡不长树，林带随雪线自然收束 */
+      var FOREST_CELL = 4.5;        // 格子边长（m）
+      var FOREST_MIN_OFF = 27;      // 走廊留空：距谷底中心线小于此值绝不长树（道内障碍树在 ±25m 内，互不侵入）
+      var FOREST_MAX_OFF = 118;     // 森林横向外限（雪线通常先于此收束）
+      var SNOWLINE_REL = 11;        // 雪线：高出当地谷底超过此值不长树
+      function cellHash(ix, iz, salt) { // 整数格哈希 → [0,1)，负格号同样稳定
+        var h = Math.imul(ix | 0, 374761393) ^ Math.imul(iz | 0, 668265263) ^ Math.imul(salt | 0, 974711749);
+        h = Math.imul(h ^ (h >>> 13), 1274126177);
+        h ^= h >>> 16;
+        return (h >>> 0) / 4294967296;
+      }
+      function vnoise(x, z, cell, salt) { // 值噪声：格点哈希 + 平滑插值，cell = 波长（m）
+        var fx = x / cell, fz = z / cell;
+        var ix = Math.floor(fx), iz = Math.floor(fz);
+        var ux = fx - ix, uz = fz - iz;
+        ux = ux * ux * (3 - 2 * ux); uz = uz * uz * (3 - 2 * uz);
+        var a = cellHash(ix, iz, salt), b = cellHash(ix + 1, iz, salt),
+            c = cellHash(ix, iz + 1, salt), d = cellHash(ix + 1, iz + 1, salt);
+        return a + (b - a) * ux + (c - a) * uz + (a - b - c + d) * ux * uz;
+      }
+      function forestDensityAt(x, z, sA, sB) { // 低频密度场：64m 大片区为主 + 27m 中频补细节
+        return vnoise(x, z, 64, sA) * 0.68 + vnoise(x, z, 27, sB) * 0.32;
+      }
       function scatterChunk(ch, isStart) {
         var rnd = mulberry32(ch.seed);
         ch.colliders = [];
         ch.gate = null;
         var cz = ch.mesh.position.z;
-        var t0 = ch.idx * T_PER, r0 = ch.idx * R_PER;
+        var t0 = ch.idx * TREE_BLK, r0 = ch.idx * R_PER;
         var gi = ch.idx; // 旗门槽位 = 块序号
         var gateZ = cz - 20 - rnd() * 70;
         var gateCx = valleyCenter(gateZ) + (rnd() * 2 - 1) * 13; // 旗门跟着山谷中心线走
@@ -1121,7 +1157,8 @@
           hideInst(poleIM, gi * 2); hideInst(poleIM, gi * 2 + 1);
           hideInst(flagIM, gi * 2); hideInst(flagIM, gi * 2 + 1);
         }
-        /* 树丛疏密：按世界段哈希分密林段 / 普通段 / 开阔段，整段风格一致而不是均匀撒树 */
+        /* 旧撒点的段密度参数：道外布树已由网格哈希森林（第 15 项）接管，但本循环的
+           随机数序列必须原样走完（旗门/岩石/道内树靠它对齐），故计算保留、结果只用于走流 */
         var densH = segHash(Math.round(-cz / CH_LEN) * 3 + 7);
         var forestDens = densH < 0.32 ? 0.28 : (densH < 0.68 ? 0.72 : 1.1); // 开阔 / 普通 / 密林
         var clusA = cz - 15 - rnd() * 40, clusB = cz - 65 - rnd() * 40;      // 本块两个聚簇中心
@@ -1138,7 +1175,7 @@
           } while (tries < 8 && !isStart && ch.gate && Math.abs(tz - gateZ) < 5 && Math.abs(tx - gateCx) < gateHalf + 2.6);
           function hideTree() {
             hideInst(trunkIM, slot); hideInst(folIM, slot); hideInst(fol2IM, slot);
-            hideInst(pineIM, slot); hideInst(pineTopIM, slot);
+            hideInst(pineIM, slot); hideInst(pineTopIM, slot); hideInst(capIM, slot);
           }
           if (!isStart && nearSlalom(tx, tz)) { hideTree(); continue; } // 旗门阵门位留空，节奏阵列不被树堵
           if (isStart && tz > -26 && Math.abs(tOff) < 26) { hideTree(); continue; }
@@ -1151,17 +1188,26 @@
           var ty = groundH(tx, tz);
           var sc = 0.8 + rnd() * 0.85;
           var isPine = rnd() < 0.42; // 两树种混搭
+          if (!inTrack) {
+            /* 道外森林已由下方网格哈希森林（第 15 项）接管：本槽只走完与旧撒点
+               完全相同的随机数序列（树种 + 三次朝向抽签）再隐藏——旗门、岩石、
+               道内障碍树的随机流逐位不变，其他系统一律不动 */
+            rnd(); rnd(); rnd();
+            hideTree(); continue;
+          }
           if (isPine) {
             // 矮胖松树：干短、宽伞冠两层，整体更矮更宽
             setInst(trunkIM, slot, tx, ty + 0.55 * sc, tz, rnd() * 3, sc * 1.25, sc * 0.7, sc * 1.25);
             setInst(pineIM, slot, tx, ty + (1.0 + 1.55) * sc, tz, rnd() * 3, sc, sc, sc);
             setInst(pineTopIM, slot, tx, ty + (1.0 + 3.1) * sc, tz, rnd() * 3, sc, sc, sc);
+            setInst(capIM, slot, tx, ty + (1.0 + 3.7) * sc, tz, 0, sc * 1.15, sc * 0.65, sc * 1.15); // 伞冠顶积雪：底圈略宽出冠面才看得见
             hideInst(folIM, slot); hideInst(fol2IM, slot);
           } else {
             // 高瘦云杉：两层尖锥（原有造型）
             setInst(trunkIM, slot, tx, ty + 0.8 * sc, tz, rnd() * 3, sc, sc, sc);
             setInst(folIM, slot, tx, ty + (1.6 + 2.6) * sc, tz, rnd() * 3, sc, sc, sc);
             setInst(fol2IM, slot, tx, ty + (1.6 + 4.6) * sc, tz, rnd() * 3, sc, sc, sc);
+            setInst(capIM, slot, tx, ty + (1.6 + 5.3) * sc, tz, 0, sc * 0.95, sc * 0.9, sc * 0.95); // 尖冠顶积雪：底圈略宽出冠面才看得见
             hideInst(pineIM, slot); hideInst(pineTopIM, slot);
           }
           if (Math.abs(tOff) <= 34) ch.colliders.push({ x: tx, z: tz, r: 0.55 * sc + 0.25, kind: 'tree', near: false });
@@ -1182,11 +1228,64 @@
           rockIM.setMatrixAt(rslot, dummy.matrix);
           ch.colliders.push({ x: rx, z: rz, r: rs * 0.95 + 0.2, kind: 'rock', near: false });
         }
+        /* ================= 网格哈希森林（第 15 项） =================
+           枚举本块 z 带 [cz-114, cz+6]（与旧撒点同带，相邻块首尾相接、格子不重不漏）
+           内的全部 4.5m 格子：格心落在带内的格子归本块，树的一切属性由格号哈希
+           派生——哪块 chunk 来渲染，同一格永远是同一棵树。槽位从本块 T_PER 之后起，
+           没用满的槽位逐个隐藏（回收复用不留旧树） */
+        var fsPresence = deriveSeed(mountainSeed, 77021), fsKind = deriveSeed(mountainSeed, 77022),
+            fsScale = deriveSeed(mountainSeed, 77023), fsRot = deriveSeed(mountainSeed, 77024),
+            fsJit = deriveSeed(mountainSeed, 77025),
+            fsNoiseA = deriveSeed(mountainSeed, 77031), fsNoiseB = deriveSeed(mountainSeed, 77032);
+        var hutX = valleyCenter(-38) + 36; // 出发点小屋的世界位置：周围留空，树不长进屋里
+        var fCount = 0;
+        var fgzMin = Math.ceil((cz - 114) / FOREST_CELL - 0.5), fgzMax = Math.floor((cz + 6) / FOREST_CELL - 0.5);
+        var fgxMin = Math.floor((-19 - FOREST_MAX_OFF) / FOREST_CELL), fgxMax = Math.floor((19 + FOREST_MAX_OFF) / FOREST_CELL);
+        for (var fgz = fgzMax; fgz >= fgzMin && fCount < F_PER; fgz--) { // 自近及远填槽：极密段截断也先保住眼前林子
+          for (var fgx = fgxMin; fgx <= fgxMax && fCount < F_PER; fgx++) {
+            var ftx = (fgx + 0.5) * FOREST_CELL + (cellHash(fgx, fgz, fsJit) - 0.5) * FOREST_CELL * 0.72;
+            var ftz = (fgz + 0.5) * FOREST_CELL + (cellHash(fgx, fgz, fsJit + 7) - 0.5) * FOREST_CELL * 0.72;
+            if (Math.abs(ftx) > 136) continue; // 地形块横向 ±140m 之外没有地面，不放树
+            var fvc = valleyCenter(ftz);
+            var faoff = Math.abs(ftx - fvc);
+            if (faoff < FOREST_MIN_OFF || faoff > FOREST_MAX_OFF) continue; // 雪道走廊 + 安全距离内绝不长树
+            if (ftz > -30 && faoff < 46) continue; // 出发点空地（世界锚定，chunk 回收后也一致）
+            if (Math.abs(ftz + 38) < 12 && Math.abs(ftx - hutX) < 10) continue; // 小屋留空
+            var fdens = forestDensityAt(ftx, ftz, fsNoiseA, fsNoiseB);
+            var flatFade = 1 - 0.6 * clamp((faoff - 55) / 55, 0, 1); // 越往谷壁高处林子越稀疏
+            var fkeep = clamp((fdens - 0.44) * 2.0, 0, 0.5) * flatFade; // 密度场成片：低于阈值整片是林间空地
+            if (fkeep <= 0 || cellHash(fgx, fgz, fsPresence) > fkeep) continue;
+            var fty = groundH(ftx, ftz);
+            if (fty - groundH(fvc, ftz) > SNOWLINE_REL) continue; // 雪线以上不长树
+            var fslot = t0 + T_PER + fCount++;
+            var fsc = (0.72 + cellHash(fgx, fgz, fsScale) * 1.05) * (0.85 + fdens * 0.35); // 大小错落，密林深处更高大
+            var frot = cellHash(fgx, fgz, fsRot) * Math.PI * 2;
+            if (cellHash(fgx, fgz, fsKind) < 0.42) { // 矮胖松树
+              setInst(trunkIM, fslot, ftx, fty + 0.55 * fsc, ftz, frot, fsc * 1.25, fsc * 0.7, fsc * 1.25);
+              setInst(pineIM, fslot, ftx, fty + (1.0 + 1.55) * fsc, ftz, frot + 0.7, fsc, fsc, fsc);
+              setInst(pineTopIM, fslot, ftx, fty + (1.0 + 3.1) * fsc, ftz, frot + 1.9, fsc, fsc, fsc);
+              setInst(capIM, fslot, ftx, fty + (1.0 + 3.7) * fsc, ftz, 0, fsc * 1.15, fsc * 0.65, fsc * 1.15);
+              hideInst(folIM, fslot); hideInst(fol2IM, fslot);
+            } else { // 高瘦云杉
+              setInst(trunkIM, fslot, ftx, fty + 0.8 * fsc, ftz, frot, fsc, fsc, fsc);
+              setInst(folIM, fslot, ftx, fty + (1.6 + 2.6) * fsc, ftz, frot + 0.7, fsc, fsc, fsc);
+              setInst(fol2IM, fslot, ftx, fty + (1.6 + 4.6) * fsc, ftz, frot + 1.9, fsc, fsc, fsc);
+              setInst(capIM, fslot, ftx, fty + (1.6 + 5.3) * fsc, ftz, 0, fsc * 0.95, fsc * 0.9, fsc * 0.95);
+              hideInst(pineIM, fslot); hideInst(pineTopIM, fslot);
+            }
+            if (faoff <= 34) ch.colliders.push({ x: ftx, z: ftz, r: 0.55 * fsc + 0.25, kind: 'tree', near: false });
+          }
+        }
+        for (var fHide = t0 + T_PER + fCount; fHide < t0 + TREE_BLK; fHide++) { // 本块没用满的森林槽位全部隐藏
+          hideInst(trunkIM, fHide); hideInst(folIM, fHide); hideInst(fol2IM, fHide);
+          hideInst(pineIM, fHide); hideInst(pineTopIM, fHide); hideInst(capIM, fHide);
+        }
         trunkIM.instanceMatrix.needsUpdate = true;
         folIM.instanceMatrix.needsUpdate = true;
         fol2IM.instanceMatrix.needsUpdate = true;
         pineIM.instanceMatrix.needsUpdate = true;
         pineTopIM.instanceMatrix.needsUpdate = true;
+        capIM.instanceMatrix.needsUpdate = true;
         rockIM.instanceMatrix.needsUpdate = true;
         poleIM.instanceMatrix.needsUpdate = true;
         flagIM.instanceMatrix.needsUpdate = true;
