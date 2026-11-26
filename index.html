@@ -462,7 +462,7 @@
         <p class="fineprint seedNote">同一座山：输入相同种子号，山形、树林、雪道段落完全相同</p>
         <p class="fineprint" id="startBestLine"></p>
         <button class="bigbtn" id="startBtn">开始滑行 · 单板 · 橙 · 黄昏金顶道</button>
-        <p class="fineprint">点任意处或按空格也能开始 · 建议开声音，有风声 · M 键或右上角喇叭可静音 · v19 新增：森林规则 · 网格哈希布树，成片林带、林间空地与雪线 · 同一种子同一座山</p>
+        <p class="fineprint">点任意处或按空格也能开始 · 建议开声音，有风声 · M 键或右上角喇叭可静音 · v20 新增：逐像素雪光 · 雪面光色跟着太阳走，向阳坡暖亮、背阴坡冷蓝，阳光下雪粒细碎闪光</p>
       </div>
     </div>
 
@@ -903,6 +903,59 @@
         color: 0xffffff, map: snowTex, bumpMap: snowTex, bumpScale: 0.3,
         roughness: 0.88, metalness: 0, vertexColors: true
       });
+      /* ================= 逐像素雪光（第 16 项） =================
+         在雪面标准材质上注入逐像素光照：不换管线、不另起雾——注入点在
+         opaque_fragment 之后、雾效之前，场景既有的雾（昼夜雾色 + 天气能见度）
+         照旧在最后把远处雪面按高度与距离混进雾色，这里只管雪面本身的光色：
+         ① 漫反射色级：逐像素法线 · 太阳方向 → 向阳面乘暖色（随昼夜太阳色温走，
+            黄昏更金、极光夜自动转冷月色）、背阴面乘冷蓝天光（只压色不压黑）；
+         ② 雪粒闪光：世界坐标哈希出细碎晶格 + 每格随机微法线，半角向量对上才闪，
+            视角一动就生灭；强度吃昼夜关键帧的 glit（正午弱、黄昏最盛、夜里近熄）；
+         ③ 粉雪/冰面分区仍走原有顶点色（vertexColors），本注入只乘色级、不动分区。
+         uniform 每帧在 updateDayNight 里按 ENV 喂：太阳方向与光 rig 严格同源 */
+      var snowUni = {
+        uSunDirW: { value: new THREE.Vector3(0.4, 0.8, -0.45) },
+        uSunTint: { value: new THREE.Color(0xfff1d8) },
+        uSkyTint: { value: new THREE.Color(0xbfd8ff) },
+        uGlitAmt: { value: 0.45 },
+        uTime: { value: 0 }
+      };
+      snowMat.onBeforeCompile = function (shader) {
+        shader.uniforms.uSunDirW = snowUni.uSunDirW;
+        shader.uniforms.uSunTint = snowUni.uSunTint;
+        shader.uniforms.uSkyTint = snowUni.uSkyTint;
+        shader.uniforms.uGlitAmt = snowUni.uGlitAmt;
+        shader.uniforms.uTime = snowUni.uTime;
+        shader.vertexShader = shader.vertexShader
+          .replace('#include <common>', '#include <common>\nvarying vec3 vSnowWP;\nvarying vec3 vSnowNW;')
+          .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvSnowWP = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvSnowNW = normalize(mat3(modelMatrix) * objectNormal);');
+        shader.fragmentShader = shader.fragmentShader
+          .replace('#include <common>', '#include <common>\n' +
+            'varying vec3 vSnowWP;\nvarying vec3 vSnowNW;\n' +
+            'uniform vec3 uSunDirW;\nuniform vec3 uSunTint;\nuniform vec3 uSkyTint;\n' +
+            'uniform float uGlitAmt;\nuniform float uTime;\n' +
+            'float snowHash(vec3 p){ p = fract(p * 0.3183099 + vec3(0.11, 0.17, 0.13)); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }')
+          .replace('#include <opaque_fragment>', '#include <opaque_fragment>\n' +
+            '{ vec3 sN = normalize(vSnowNW);\n' +
+            '  vec3 sToCam = cameraPosition - vSnowWP;\n' +
+            '  float sDist = length(sToCam);\n' +
+            '  vec3 sV = sToCam / max(sDist, 0.001);\n' +
+            '  float sNdl = dot(sN, uSunDirW);\n' +
+            '  float sFace = smoothstep(-0.3, 0.8, sNdl);\n' +              // 向阳→1、背阴→0，坡面转折平滑
+            '  vec3 sWarm = uSunTint * 0.38 + vec3(0.74);\n' +              // 向阳色级：绕太阳色温走，亮度≈1.1
+            '  vec3 sCool = uSkyTint * 0.34 + vec3(0.70);\n' +              // 背阴色级：冷蓝天光，亮度≈0.8–1.0 不沉黑
+            '  gl_FragColor.rgb *= mix(sCool, sWarm, sFace);\n' +
+            '  vec3 sCell = floor(vSnowWP * 3.0);\n' +                      // ~33cm 一格雪晶
+            '  float sH = snowHash(sCell);\n' +
+            '  if (sH > 0.965) {\n' +                                       // 约 3.5% 晶格会闪，密度克制
+            '    vec3 sGn = normalize(sN + (vec3(snowHash(sCell + 19.1), snowHash(sCell + 7.7), snowHash(sCell + 3.3)) - 0.5) * 1.7);\n' +
+            '    float sSp = pow(max(dot(sGn, normalize(sV + uSunDirW)), 0.0), 70.0);\n' +
+            '    float sLit = clamp(sNdl * 1.6 + 0.25, 0.0, 1.0);\n' +     // 背阴面基本不闪
+            '    float sFade = clamp(1.0 - sDist / 170.0, 0.0, 1.0);\n' +  // 远处交给雾，不隔空闪烁
+            '    float sTw = 0.72 + 0.28 * sin(uTime * 2.6 + sH * 43.0);\n' +
+            '    gl_FragColor.rgb += uSunTint * (sSp * sLit * sFade * sTw * uGlitAmt * 2.4);\n' +
+            '  } }');
+      };
       /* 盖层边缘羽化 alpha：中心实、向四边平滑淡出，分区边界不出现硬矩形边 */
       var patchAlphaTex = (function () {
         var c = document.createElement('canvas'); c.width = c.height = 128;
@@ -3479,6 +3532,13 @@
         if (tdSnow.snowTint) snowMat.color.lerp(TRACK_TINT_TMP.setHex(tdSnow.snowTint), tdSnow.tintAmt);
         snowMat.color.multiplyScalar(mtnCur.bright); // 远山造型系列：雪原道雪面更亮（第 13 项）
         icePatchMat.specular.lerpColors(DN_ICE_W, DN_ICE_C, ENV.night);
+        /* 逐像素雪光（第 16 项）：太阳方向与主光 rig 同源（ENV 光位归一化），色温吃太阳色、
+           背阴天光吃半球天光色、闪光强度吃关键帧 glit——太阳一动，雪面光色同帧跟走 */
+        snowUni.uSunDirW.value.set(ENV.lx, ENV.ly, ENV.lz).normalize();
+        snowUni.uSunTint.value.copy(ENV.sunC);
+        snowUni.uSkyTint.value.copy(ENV.hemiSkyC);
+        snowUni.uGlitAmt.value = ENV.glit;
+        snowUni.uTime.value = tNow;
         glitMat.color.copy(ENV.glowC).lerp(DN_WHITE, 0.25);
         sprayMat.color.lerpColors(DN_SPRAY_W, DN_SPRAY_C, ENV.night * 0.85);
         puffMat.color.lerpColors(DN_PUFF_W, DN_PUFF_C, ENV.night * 0.85);
