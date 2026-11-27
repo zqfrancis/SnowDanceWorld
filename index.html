@@ -357,7 +357,7 @@
     <div id="zoneTag"></div>
     <div id="weatherToast"></div>
     <button id="equipBtn" aria-label="切换装备（B 键）" title="切换单板 / 双板（B 键）">单板 · 切换 ⇄</button>
-    <button id="muteBtn" aria-label="静音切换">🔊</button>
+    <button id="muteBtn" aria-label="静音切换" title="静音 / 取消静音（M 键）· 🎵 合成配乐 · 越快越燃">🔊</button>
 
     <div id="steer">
       <button class="sbtn" id="btnL" aria-label="向左">◀</button>
@@ -387,6 +387,7 @@
           <div><span class="dot">▸</span> <b>选雪道定光</b>：开局前选一条雪道，整局锁定它的时段光与基础雪质——晨光粉雪最松软、午后冰面最滑、黄昏金顶是标准雪、极光夜里旗门带微光；天气仍会自己流转</div>
           <div><span class="dot">▸</span> <b>天气流转</b>：晴雪 → 中雪 → 暴风雪 → 雾雪循环往复，雪势、侧风与能见度随之呼吸——暴风雪里雾最浓、障碍最晚才看清，看右上角天气牌</div>
           <div><span class="dot">▸</span> 速度越快视野越开、风声越尖，活得越久分越高</div>
+          <div><span class="dot">▸</span> <b>合成配乐</b>：🎵 配乐随速度呼吸——慢滑只有安静铺底，越滑越快，低音、拨弦、闪光、旋律层层叠进来；风声仍是主角，配乐只是衬底</div>
           <div><span class="dot">▸</span> <b>换装备</b>：下方选单板 / 双板开局；滑行中按 <b>B 键</b> 或点右上角按钮随时原地切换，速度分数都不清零</div>
           <div><span class="dot">▸</span> <b>搭配</b>：下方可换雪服颜色、板面图案与头盔雪镜，点选即时换上、自动记住</div>
           <div><span class="dot">▸</span> <b>路上有人</b>：会遇上其他单板客与滑雪者，贴身掠过只有一阵风声——不撞人、不计分，专心你的线</div>
@@ -462,7 +463,7 @@
         <p class="fineprint seedNote">同一座山：输入相同种子号，山形、树林、雪道段落完全相同</p>
         <p class="fineprint" id="startBestLine"></p>
         <button class="bigbtn" id="startBtn">开始滑行 · 单板 · 橙 · 黄昏金顶道</button>
-        <p class="fineprint">点任意处或按空格也能开始 · 建议开声音，有风声 · M 键或右上角喇叭可静音 · v20 新增：逐像素雪光 · 雪面光色跟着太阳走，向阳坡暖亮、背阴坡冷蓝，阳光下雪粒细碎闪光</p>
+        <p class="fineprint">点任意处或按空格也能开始 · 建议开声音，有风声和配乐 · M 键或右上角喇叭可静音（音乐与音效一起静） · v21 新增：合成配乐 · 越快越燃——五层声音全由代码现场合成，配乐随速度层层叠加，风声仍是主角</p>
       </div>
     </div>
 
@@ -2795,6 +2796,7 @@
           whistleGain = AC.createGain(); whistleGain.gain.value = 0;
           whistleOsc.connect(whistleGain); whistleGain.connect(masterGain);
           srcPink.start(); src.start(); whistleOsc.start();
+          initMusic(); // 合成配乐总线与五层增益（v21）：只建节点不出声，调度器等 startGame 才启动
         } catch (e) { AC = null; }
       }
       function outNode() { return masterGain || (AC && AC.destination); }
@@ -2958,6 +2960,199 @@
         if (whistleGain) whistleGain.gain.setTargetAtTime(0, t, c);
         if (carveGain) carveGain.gain.setTargetAtTime(0, t, c);
         if (iceGain) iceGain.gain.setTargetAtTime(0, t, c);
+      }
+
+      /* ================= 合成配乐（v21 · 第 17 项：代码合成声音） =================
+         五层配乐全部由振荡器 + 滤波器 + 包络现场合成，零音频文件、零外部请求：
+         铺底 Pad（任何速度都在）／低音 Bass／拨弦 Pluck／闪光 Sparkle／旋律 Melody。
+         固定 90 BPM，lookahead 调度器（25ms 轮询、提前 0.12 秒排音）保证节拍稳定；
+         和弦进行 I–V–vi–IV（C 大调），每 4 小节换一次和弦，旋律是 8 小节五声循环。
+         层数随速度连续淡入淡出（updateMusicLayers 每帧平滑插值层增益），不是硬切换；
+         音乐走 musicBus → masterGain，与音效共用静音（M 键 / 喇叭按钮、状态存 localStorage）。
+         总音量克制：musicBus 0.6 封顶，各层叠加峰值压在风声主层之下——风声仍是主角。 */
+      var MUS_BPM = 90;
+      var MUS_STEP = 60 / MUS_BPM / 2;          // 八分音符时长（秒）≈ 0.333
+      var MUS_CHORD_STEPS = 32;                  // 每和弦 4 小节 = 32 个八分音符
+      /* tones：铺底三和弦音（八度 4 附近，好声部连接）；bass：低音根音；pluck/sparkle 由 tones 推导 */
+      var MUS_CHORDS = [
+        { bass: 48, tones: [60, 64, 67] },  // I  C：C E G
+        { bass: 43, tones: [59, 62, 67] },  // V  G：B D G
+        { bass: 45, tones: [57, 60, 64] },  // vi Am：A C E
+        { bass: 41, tones: [57, 60, 65] }   // IV F：A C F
+      ];
+      var MUS_PLUCK_PAT = [0, 1, 2, 3, 2, 1, 2, 3]; // 一小节 8 个八分音符的分解和弦走向（3 = 根音高八度）
+      /* 旋律：8 小节 = 64 个八分音符，C 大调五声音阶（C D E G A），0 = 休止；只在高速层出现 */
+      var MUS_MELODY = [
+        72, 0, 76, 0, 79, 0, 76, 0,
+        74, 0, 76, 0, 72, 0, 0, 0,
+        76, 0, 79, 0, 81, 0, 79, 0,
+        76, 0, 74, 0, 72, 0, 0, 0,
+        72, 0, 76, 0, 79, 0, 76, 0,
+        81, 0, 79, 0, 76, 0, 74, 0,
+        76, 0, 79, 0, 84, 0, 81, 0,
+        79, 0, 76, 0, 74, 0, 72, 0
+      ];
+      var musicBus = null;
+      var musPadGain = null, musBassGain = null, musPluckGain = null, musSparkGain = null, musMelGain = null;
+      var padFilter = null, padBreath = null;
+      var musTimer = null, musStep = 0, musNextT = 0, musicOn = false;
+      var padVoices = []; // 在响的铺底长音 { o1, o2, g }，停乐时逐个收掉防残留和弦叠响
+      function mtof(m) { return 440 * Math.pow(2, (m - 69) / 12); }
+      function initMusic() {
+        musicBus = AC.createGain(); musicBus.gain.value = 0.6; musicBus.connect(masterGain);
+        /* 铺底链：音符增益 → 低通 → 呼吸增益（LFO 缓慢起伏）→ 层增益 → 总线 */
+        padFilter = AC.createBiquadFilter(); padFilter.type = 'lowpass'; padFilter.frequency.value = 850; padFilter.Q.value = 0.4;
+        padBreath = AC.createGain(); padBreath.gain.value = 0.82;
+        var lfo = AC.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 0.08;
+        var lfoG = AC.createGain(); lfoG.gain.value = 0.18;
+        lfo.connect(lfoG); lfoG.connect(padBreath.gain); lfo.start();
+        musPadGain = AC.createGain(); musPadGain.gain.value = 0;
+        padFilter.connect(padBreath); padBreath.connect(musPadGain); musPadGain.connect(musicBus);
+        musBassGain = AC.createGain(); musBassGain.gain.value = 0; musBassGain.connect(musicBus);
+        musPluckGain = AC.createGain(); musPluckGain.gain.value = 0; musPluckGain.connect(musicBus);
+        musSparkGain = AC.createGain(); musSparkGain.gain.value = 0; musSparkGain.connect(musicBus);
+        musMelGain = AC.createGain(); musMelGain.gain.value = 0; musMelGain.connect(musicBus);
+      }
+      /* 铺底：每个和弦音两个失谐（±6 音分）三角波长音，慢起慢落与下一和弦交叠，低通压住高频 */
+      function schedulePad(chord, t) {
+        var dur = MUS_STEP * MUS_CHORD_STEPS;
+        for (var i = 0; i < chord.tones.length; i++) {
+          var g = AC.createGain();
+          g.gain.setValueAtTime(0.0008, t);
+          g.gain.exponentialRampToValueAtTime(0.04, t + 1.6);
+          g.gain.setValueAtTime(0.04, t + dur - 1.2);
+          g.gain.exponentialRampToValueAtTime(0.0008, t + dur + 0.6);
+          g.connect(padFilter);
+          var voice = { g: g, o1: null, o2: null };
+          for (var k = 0; k < 2; k++) {
+            var o = AC.createOscillator();
+            o.type = 'triangle'; o.frequency.value = mtof(chord.tones[i]);
+            o.detune.value = k === 0 ? -6 : 6;
+            o.connect(g); o.start(t); o.stop(t + dur + 0.8);
+            if (k === 0) voice.o1 = o; else voice.o2 = o;
+          }
+          voice.o2.onended = (function (v) { return function () {
+            var ix = padVoices.indexOf(v); if (ix >= 0) padVoices.splice(ix, 1);
+          }; })(voice);
+          padVoices.push(voice);
+        }
+      }
+      function stopPadVoices(tc) {
+        if (!AC) { padVoices.length = 0; return; }
+        var t = AC.currentTime;
+        for (var i = 0; i < padVoices.length; i++) {
+          var v = padVoices[i];
+          try {
+            v.g.gain.cancelScheduledValues(t);
+            v.g.gain.setTargetAtTime(0, t, tc);
+            v.o1.stop(t + 0.7); v.o2.stop(t + 0.7);
+          } catch (e) { /* 已停的振荡器忽略 */ }
+        }
+        padVoices.length = 0;
+      }
+      /* 低音：三角波 + 低通，每拍根音短促落下；每小节最后一拍偶尔走五音，给一点推动感 */
+      function bassNote(midi, t, vol) {
+        var o = AC.createOscillator(); o.type = 'triangle'; o.frequency.value = mtof(midi);
+        var f = AC.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 320;
+        var g = AC.createGain();
+        g.gain.setValueAtTime(0.0008, t);
+        g.gain.exponentialRampToValueAtTime(vol, t + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0008, t + 0.5);
+        o.connect(f); f.connect(g); g.connect(musBassGain);
+        o.start(t); o.stop(t + 0.56);
+      }
+      /* 拨弦：方波经快速下滑的低通 + 快速衰减包络，短促清脆 */
+      function pluckNote(midi, t) {
+        var o = AC.createOscillator(); o.type = 'square'; o.frequency.value = mtof(midi);
+        var f = AC.createBiquadFilter(); f.type = 'lowpass'; f.Q.value = 1;
+        f.frequency.setValueAtTime(2400, t);
+        f.frequency.exponentialRampToValueAtTime(700, t + 0.16);
+        var g = AC.createGain();
+        g.gain.setValueAtTime(0.0008, t);
+        g.gain.exponentialRampToValueAtTime(0.13, t + 0.008);
+        g.gain.exponentialRampToValueAtTime(0.0008, t + 0.19);
+        o.connect(f); f.connect(g); g.connect(musPluckGain);
+        o.start(t); o.stop(t + 0.22);
+      }
+      /* 闪光：高音区正弦短音、长尾，像雪晶一闪——稀疏点缀，只在较快速度层出现 */
+      function sparkleNote(midi, t) {
+        var o = AC.createOscillator(); o.type = 'sine'; o.frequency.value = mtof(midi);
+        var g = AC.createGain();
+        g.gain.setValueAtTime(0.0008, t);
+        g.gain.exponentialRampToValueAtTime(0.09, t + 0.006);
+        g.gain.exponentialRampToValueAtTime(0.0008, t + 0.55);
+        o.connect(g); g.connect(musSparkGain);
+        o.start(t); o.stop(t + 0.6);
+      }
+      /* 旋律：正弦 + 轻微颤音（5.4Hz、±4 音分），包络柔和，不抢戏 */
+      function melodyNote(midi, t) {
+        var o = AC.createOscillator(); o.type = 'sine'; o.frequency.value = mtof(midi);
+        var vib = AC.createOscillator(); vib.type = 'sine'; vib.frequency.value = 5.4;
+        var vibG = AC.createGain(); vibG.gain.value = 4;
+        vib.connect(vibG); vibG.connect(o.detune);
+        var g = AC.createGain();
+        g.gain.setValueAtTime(0.0008, t);
+        g.gain.exponentialRampToValueAtTime(0.105, t + 0.04);
+        g.gain.exponentialRampToValueAtTime(0.035, t + 0.3);
+        g.gain.exponentialRampToValueAtTime(0.0008, t + 0.62);
+        o.connect(g); g.connect(musMelGain);
+        o.start(t); o.stop(t + 0.68); vib.start(t); vib.stop(t + 0.68);
+      }
+      /* 一个八分音符步的排音：和弦由步数决定，各层是否出声只看各自层增益（速度淡入淡出在增益上做） */
+      function scheduleStep(step, t) {
+        var chord = MUS_CHORDS[Math.floor(step / MUS_CHORD_STEPS) % MUS_CHORDS.length];
+        if (step % MUS_CHORD_STEPS === 0) schedulePad(chord, t);
+        if (step % 2 === 0) { // 每拍
+          var fifth = (step % 8 === 6);
+          bassNote(chord.bass + (fifth ? 7 : 0), t, fifth ? 0.22 : 0.34);
+        }
+        var tones4 = [chord.tones[0], chord.tones[1], chord.tones[2], chord.tones[0] + 12];
+        pluckNote(tones4[MUS_PLUCK_PAT[step % 8]] + 12, t);
+        if (step % 4 === 2 && Math.random() < 0.5) { // 闪光稀疏：约每两拍半概率出现一次
+          sparkleNote(chord.tones[Math.floor(step / 4) % 3] + 24, t);
+        }
+        var mel = MUS_MELODY[step % 64];
+        if (mel) melodyNote(mel, t);
+      }
+      function musicScheduler() {
+        if (!AC || !musicOn) return;
+        while (musNextT < AC.currentTime + 0.12) {
+          scheduleStep(musStep, musNextT);
+          musNextT += MUS_STEP;
+          musStep++;
+        }
+      }
+      /* 音乐只在点开始后启动（AudioContext 也在那时建/恢复，合浏览器自动播放策略）；
+         开始界面、结算界面一律不出声 */
+      function startMusic() {
+        if (!AC || !musicBus) return;
+        stopPadVoices(0.08); // 清掉上一局可能残留的铺底长音
+        musStep = 0; musNextT = AC.currentTime + 0.1; musicOn = true;
+        if (!musTimer) musTimer = setInterval(musicScheduler, 25);
+      }
+      /* 撞树结算 / 回开始界面：调度器停摆，五层增益一起淡出，铺底长音逐个收掉 */
+      function stopMusic() {
+        musicOn = false;
+        if (musTimer) { clearInterval(musTimer); musTimer = null; }
+        stopPadVoices(0.3);
+        if (!AC) return;
+        var t = AC.currentTime;
+        var layers = [musPadGain, musBassGain, musPluckGain, musSparkGain, musMelGain];
+        for (var i = 0; i < layers.length; i++) {
+          if (layers[i]) layers[i].gain.setTargetAtTime(0, t, 0.35);
+        }
+      }
+      function layerAmt(kmh, lo, hi) { var u = clamp((kmh - lo) / (hi - lo), 0, 1); return u * u * (3 - 2 * u); }
+      /* 速度驱动分层（km/h）：铺底常在；低音 ≈15–30、拨弦 ≈30–50、闪光 ≈50–70、旋律 ≈70+ 依次叠入；
+         每层增益用 setTargetAtTime 约 0.7 秒平滑过渡，层间不跳变 */
+      function updateMusicLayers(kmh) {
+        if (!AC || !musicOn || !musPadGain) return;
+        var t = AC.currentTime, tc = 0.7;
+        musPadGain.gain.setTargetAtTime(0.55, t, tc);
+        musBassGain.gain.setTargetAtTime(0.5 * layerAmt(kmh, 12, 24), t, tc);
+        musPluckGain.gain.setTargetAtTime(0.5 * layerAmt(kmh, 28, 42), t, tc);
+        musSparkGain.gain.setTargetAtTime(0.5 * layerAmt(kmh, 48, 62), t, tc);
+        musMelGain.gain.setTargetAtTime(0.5 * layerAmt(kmh, 66, 80), t, tc);
       }
 
       /* ================= 游戏状态 ================= */
@@ -3182,6 +3377,7 @@
 
       function startGame() {
         initAudio();
+        startMusic(); // 合成配乐从这一刻才起（v21）：铺底先行，其余层随速度叠入
         resetWorld();
         state = 'play';
         document.getElementById('startVeil').classList.add('hidden');
@@ -3191,6 +3387,7 @@
       /* 结算后回开始界面（第 11 项动线）：世界重置回出发状态，可换雪道 / 装备再滑；
          开始牌上的最佳成绩行同步刷新成最新存档 */
       function backToMenu() {
+        stopMusic(); // 回开始界面：配乐淡出静默（撞树时已停过，这里兜底）
         resetWorld();
         state = 'menu';
         document.getElementById('overVeil').classList.add('hidden');
@@ -3213,6 +3410,7 @@
         if (equip === 'ski' && !reducedMotion) launchFlyPoles(); // 双板：雪杖随翻滚脱手飞出（纯视觉）
         document.getElementById('overWhy').textContent = why;
         silenceLayers(0.06); // 撞击后所有风声/刻滑快速收住再停
+        stopMusic(); // 配乐五层同步淡出（v21），重开一局后随速度再起
       }
       function showOver() {
         document.getElementById('zoneTag').className = '';
@@ -3781,6 +3979,7 @@
             }
             /* 风声三层 + 刻滑 + 刮冰：统一在 updateAudioLayers 里按速度/转向/雪质平滑更新 */
             updateAudioLayers(speed, carve, airGap);
+            updateMusicLayers(speed * 3.6); // 合成配乐分层（v21）：层数随 km/h 连续淡入淡出
             hudTick += dt;
             if (hudTick > 0.08) {
               hudTick = 0;
